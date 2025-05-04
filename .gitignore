@@ -3,3 +3,79 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+## Ignore Visual Studio temporary files, build results, and user-specific files
+
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Auto-generated files
+*.log
+*.tlog
+*.vspscc
+*.vssscc
+*.cache
+*.pdb
+
+# Visual Studio Code workspace
+.vscode/
+
+# Visual Studio for Mac
+.vscode/
+.idea/
+*.sln.iml
+
+# Visual Studio working folder
+.vs/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+*.symbols.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET files
+wwwroot/lib/
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Logs
+*.log
+
+# Others
+*.dbmdl
+*.bak
+*.sql
+*.orig
+
+# Rider IDE
+.idea/
+
+# Recycle Bin for VS Code
+.history/
+
+# Ignore test result files
+TestResult.xml
+TestResults/
+*.trx
+
+# Ignore publish outputs
+publish/
