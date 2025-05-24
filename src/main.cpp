@@ -266,9 +266,14 @@ void setup() {
       [](float value) { setBarValue(WATER_PORT_AFT, (uint8_t)value); }));
 
   // Use RepeatSensor to call `updateTankValues` every 1 second
-  auto periodic_task =
-      new RepeatSensor<bool>(1000, []() { epDisplayUpdate();
-    return true; });
+  event_loop()->onRepeat(
+  1000,
+  []() { 
+    epDisplayUpdate();
+    Serial.println("Graph Update!");
+ }
+);
+
 }
 
 void loop() { event_loop()->tick(); }
