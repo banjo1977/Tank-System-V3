@@ -263,7 +263,8 @@ void setup() {
   input_calibration_5->connect_to(new LambdaConsumer<float>(
       [](float value) { setBarValue(WATER_STBD, (uint8_t)value); }));
   input_calibration_6->connect_to(new LambdaConsumer<float>(
-      [](float value) { setBarValue(WATER_PORT_AFT, (uint8_t)value); }));
+      [](float value) { setBarValue(WATER_PORT_FWD, (uint8_t)value); }));
+
 
   // Use RepeatSensor to call `updateTankValues` every 1 second
   event_loop()->onRepeat(
