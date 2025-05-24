@@ -2,8 +2,7 @@
 //
 // This is a line by line rebuild of the tank system
 // This will draw in pin connections and the analogue readings but at V 1 will
-// not include display which will be in v 3.1 It will also not exploit the
-// 'touch pins' function (the touch buttons)
+// not include display which will be in v 3.1 
 
 #include <memory>
 
@@ -22,7 +21,10 @@ using namespace sensesp;
 void setup() {
   SetupLogging(ESP_LOG_DEBUG);
 
-  epDisplayInit();
+  //Init the display
+  epDisplayInit();    
+  Serial.println("Display initiated");
+  
 
   // Construct the global SensESPApp() object
   SensESPAppBuilder builder;

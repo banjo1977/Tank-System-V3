@@ -29,7 +29,7 @@ void epDisplayInit(){
     display.init(115200);
   
     // Simulating time for testing purposes (You can replace this with real-time function)
-    setTime(0, 8, 23, 4, 5, 25);  // 04/05/25 00:08:23
+    setTime(23, 43, 00, 24, 5, 25);  // 24/05/25 23:43:23
   
     drawBarGraphs();
     drawStatusArea();
