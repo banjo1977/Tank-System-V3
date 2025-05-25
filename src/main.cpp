@@ -336,14 +336,14 @@ void setup()
 
     // Use RepeatSensor to call `updateTankValues` every 1 second
     event_loop()->onRepeat(
-        1000,
+        2000,
         []()
         {
-            // Update every 15 seconds
 
+             display.fillScreen(GxEPD_WHITE); // Clear the screen
             drawBarGraphs();
             drawStatusArea();
-            display.update(); // Update the screen
+            display.update();
 
             // Perform a full screen refresh every 120 seconds (2 minutes)
 
