@@ -55,6 +55,7 @@ const char *barLabels[NUM_BARS] = {
     "Fuel Port",
     "Fuel Stbd",
     "Black Water"};
+
 uint8_t barValues[NUM_BARS] = {33, 90, 55, 42, 30, 20};
 
 // Buzzer status and WiFi signal strength (Example data only)
@@ -72,6 +73,8 @@ void drawArc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t startA
 // Added flag to track whether the bar value is increasing or decreasing
 bool increasing[NUM_BARS] = {false, false, false, false, false, false}; // Initially, set to decreasing for all bars
 /////////////////////////////////////////////////////////////////////
+
+float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 
 using namespace sensesp;
 // Test comment
@@ -321,18 +324,18 @@ void setup()
     you can use lambda functions to update these variables whenever the values
     change*/
 
-    //   input_calibration_1->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(FUEL_STBD, (uint8_t)value); }));
-    //   input_calibration_2->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(FUEL_PORT, (uint8_t)value); }));
-    //   input_calibration_3->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(BLACK_WATER, (uint8_t)value); }));
-    //   input_calibration_4->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(WATER_PORT_AFT, (uint8_t)value); }));
-    //   input_calibration_5->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(WATER_STBD, (uint8_t)value); }));
-    //   input_calibration_6->connect_to(new LambdaConsumer<float>(
-    //       [](float value) { setBarValue(WATER_PORT_FWD, (uint8_t)value); }));
+      input_calibration_1->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[0] = value; }));
+      input_calibration_2->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[1] = value; }));
+      input_calibration_3->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[2] = value; }));
+      input_calibration_4->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[3] = value; }));
+      input_calibration_5->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[4] = value; }));
+      input_calibration_6->connect_to(new LambdaConsumer<float>(
+          [](float value) { bV[5] = value; }));
 
     // Use RepeatSensor to call `updateTankValues` every 1 second
     event_loop()->onRepeat(
@@ -340,7 +343,7 @@ void setup()
         []()
         {
 
-             display.fillScreen(GxEPD_WHITE); // Clear the screen
+            display.fillScreen(GxEPD_WHITE); // Clear the screen
             drawBarGraphs();
             drawStatusArea();
             display.update();
@@ -376,7 +379,11 @@ void setup()
                 // Ensure values stay within the 0-100 range
                 barValues[i] = constrain(barValues[i], 0, 100);
             }
-
+            
+            for (int i = 0; i < NUM_BARS; i++)
+            {
+             Serial.printf("Sensor %d: %f%\n", i + 1, bV[i]);   
+            }
             // Log the updated bar values to the terminal in tabular format
             Serial.println("  WPF  WPA  WS   FP   FS   BW");
             Serial.printf("%4d %4d %4d %4d %4d %4d\n", barValues[0], barValues[1], barValues[2], barValues[3], barValues[4], barValues[5]);
