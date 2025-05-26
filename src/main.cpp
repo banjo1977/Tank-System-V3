@@ -49,14 +49,15 @@ GxEPD_Class display(io, /*RST=*/D_RST_PIN, /*BUSY=*/D_BZ_PIN);
 #define STATUS_BASE_Y (display.height() - STATUS_HEIGHT)
 
 const char *barLabels[NUM_BARS] = {
-    "Water Port Fwd",
-    "Water Port Aft",
-    "Water Stbd",
-    "Fuel Port",
     "Fuel Stbd",
-    "Black Water"};
+    "Fuel Port",
+    "Black Water",
+    "Water Port Aft",
+    "Water Port Fwd",
+    "Water Stbd"    
+    };
 
-uint8_t barValues[NUM_BARS] = {33, 90, 55, 42, 30, 20};
+uint8_t barValues[NUM_BARS] = {0, 0, 0, 0, 0, 0}; // Initial values for the bars
 
 // Buzzer status and WiFi signal strength (Example data only)
 bool buzzerStatus = true;
@@ -70,10 +71,6 @@ void drawBuzzerIcon(int16_t x, int16_t y, bool status);
 void drawWiFiIcon(int16_t x, int16_t y, int signalStrength);
 void drawArc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t startAngle, int16_t endAngle, int numSegments);
 
-// Added flag to track whether the bar value is increasing or decreasing
-bool increasing[NUM_BARS] = {false, false, false, false, false, false}; // Initially, set to decreasing for all bars
-/////////////////////////////////////////////////////////////////////
-
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 
 using namespace sensesp;
@@ -83,8 +80,9 @@ void setup()
 {
     SetupLogging(ESP_LOG_DEBUG);
 
-    /////////////////////////////////////////////////////////////////////
+    SPI.begin(13, -1, 14, 15); // Use your custom SPI wiring!
     display.init(115200);
+    delay(100);
 
     // Simulating time for testing purposes (You can replace this with real-time function)
     setTime(0, 8, 23, 4, 5, 25); // 04/05/25 00:08:23
@@ -190,25 +188,25 @@ void setup()
         ->set_description("Analog input read interval.")
         ->set_sort_order(1000);
 
-    // Add an observer that prints out the current value of the analog input
+    // Add an observer that grabs current value of the analog input
     // every time it changes.
-    // analog_input_1->attach([analog_input_1]() {
-    //   debugD("Analog input 1 Port fuel: %f", analog_input_1->get());
-    // });
-    // analog_input_2->attach([analog_input_2]() {
-    //  debugD("Analog input 2 Stbd fuel: %f", analog_input_2->get());
-    // });
-    // analog_input_3->attach([analog_input_3]() {
-    //  debugD("Analog input 3 Black Water: %f", analog_input_3->get());
+    //analog_input_1->attach([analog_input_1]() {
+    //debugD("Analog input 1 Port fuel: %f", analog_input_1->get());
     //});
-    //  analog_input_4->attach([analog_input_4]() {
-    //  debugD("Analog input 4 fw1 Port Aft: %f", analog_input_4->get());
+    //analog_input_2->attach([analog_input_2]() {
+    //debugD("Analog input 2 Stbd fuel: %f", analog_input_2->get());
     //});
-    //  analog_input_5->attach([analog_input_5]() {
-    //  debugD("Analog input 5 fw2 Stbd: %f", analog_input_5->get());
+    //analog_input_3->attach([analog_input_3]() {
+    //debugD("Analog input 3 Black Water: %f", analog_input_3->get());
     //});
-    //  analog_input_6->attach([analog_input_6]() {
-    //  debugD("Analog input 6 fw3 Port Fwd: %f", analog_input_6->get());
+    //analog_input_4->attach([analog_input_4]() {
+    //debugD("Analog input 4 fw1 Port Aft: %f", analog_input_4->get());
+    //});
+    //analog_input_5->attach([analog_input_5]() {
+    //debugD("Analog input 5 fw2 Stbd: %f", analog_input_5->get());
+    //});
+    //analog_input_6->attach([analog_input_6]() {
+    //debugD("Analog input 6 fw3 Port Fwd: %f", analog_input_6->get());
     //});
 
     // A Linear transform takes its input, multiplies it by the multiplier, then
@@ -339,56 +337,34 @@ void setup()
 
     // Use RepeatSensor to call `updateTankValues` every 1 second
     event_loop()->onRepeat(
-        2000,
+        4000,
         []()
         {
+            // Update barValues from bV (convert ratio to percentage)
+            for (int i = 0; i < NUM_BARS; i++) {
+                float pct = bV[i] * 100.0f;
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                barValues[i] = static_cast<uint8_t>(pct);
+            }
 
-            display.fillScreen(GxEPD_WHITE); // Clear the screen
+           //display.fillScreen(GxEPD_WHITE); // Clear the screen
             drawBarGraphs();
             drawStatusArea();
             display.update();
 
             // Perform a full screen refresh every 120 seconds (2 minutes)
-
-            // Log and update bar values with random adjustments
-            for (int i = 0; i < NUM_BARS; i++)
-            {
-                int randomChange = random(0, 6); // Random change between 0 and 5%
-
-                if (increasing[i])
-                {
-                    // If increasing, add random change
-                    barValues[i] += randomChange;
-                    if (barValues[i] >= 100)
-                    {
-                        barValues[i] = 100;    // Ensure it doesn't exceed 100%
-                        increasing[i] = false; // Switch direction to decreasing
-                    }
-                }
-                else
-                {
-                    // If decreasing, subtract random change
-                    barValues[i] -= randomChange;
-                    if (barValues[i] <= 0)
-                    {
-                        barValues[i] = 0;     // Ensure it doesn't go below 0%
-                        increasing[i] = true; // Switch direction to increasing
-                    }
-                }
-
-                // Ensure values stay within the 0-100 range
-                barValues[i] = constrain(barValues[i], 0, 100);
-            }
+            //?????
             
-            for (int i = 0; i < NUM_BARS; i++)
-            {
-             Serial.printf("Sensor %d: %f%\n", i + 1, bV[i]);   
-            }
+           
             // Log the updated bar values to the terminal in tabular format
-            Serial.println("  WPF  WPA  WS   FP   FS   BW");
+            Serial.println("  FS  FP  BW   PFFW   SFW   PAFW");
             Serial.printf("%4d %4d %4d %4d %4d %4d\n", barValues[0], barValues[1], barValues[2], barValues[3], barValues[4], barValues[5]);
+            Serial.printf("%4.2f %4.2f %4.2f %4.2f %4.2f %4.2f\n", bV[0], bV[1], bV[2], bV[3], bV[4], bV[5]);
 
-            // Update the time every loop based on the arbitrary start time
+
+
+            // Update the time every loop 
             second(); // Updates the real-time clock from TimeLib
             minute();
             hour();
