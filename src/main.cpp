@@ -335,7 +335,7 @@ void setup()
       input_calibration_6->connect_to(new LambdaConsumer<float>(
           [](float value) { bV[5] = value; }));
 
-    // Use RepeatSensor to call `updateTankValues` every 1 second
+    // Use RepeatSensor to call `updateTankValues` every 4 second
     event_loop()->onRepeat(
         4000,
         []()
