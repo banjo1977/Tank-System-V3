@@ -161,6 +161,12 @@ void epaper_buzzerIcon(int16_t x, int16_t y, bool status)
     }
 }
 
+// Function to draw a more intuitive Buzzer Icon with thicker lines
+void epaper_setBuzzerIcon(bool status)
+{
+    epaper_buzzerIcon(10, STATUS_BASE_Y + 6, status);
+}
+
 // Function to draw a more intuitive WiFi Icon with thicker lines
 void epaper_wifiIcon(int16_t x, int16_t y, int signalStrength)
 {

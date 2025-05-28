@@ -28,6 +28,7 @@ void epaper_setValue(int idx, uint8_t value);
 void epaper_barGraphs();
 void epaper_statusArea();
 void epaper_buzzerIcon(int16_t x, int16_t y, bool status);
+void epaper_setBuzzerIcon(bool status);
 void epaper_wifiIcon(int16_t x, int16_t y, int signalStrength);
 void epaper_Arc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t startAngle, int16_t endAngle, int numSegments);
 
