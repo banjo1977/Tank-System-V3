@@ -3,6 +3,14 @@
 // This is a line by line rebuild of the tank system
 // This will draw in pin connections and the analogue readings but at V 1 will
 // not include display which will be in v 3.1
+//  
+
+// ToDOo:
+// Add functionality for two touch-sensitive pads:
+// Pad 1 - update the display now (ie, don't wait 120 seconds).
+// Pad 2 - Toggle the Buzzer function 'on' and 'off' and update the icon on the display.
+
+
 
 #include <memory>
 
@@ -11,25 +19,49 @@
 #include "sensesp/sensors/sensor.h"
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/transforms/linear.h"
-// #include "sensesp/system/lambda_consumer.h"
 #include "sensesp_app_builder.h"
-
+#include "sensesp/sensors/digital_output.h"
+#include "sensesp/signalk/signalk_listener.h"
+#include "sensesp/transforms/repeat.h"
 #include "epaper.h"
+
+
+#include "sensesp/controllers/smart_switch_controller.h"
+#include "sensesp/sensors/digital_input.h"
+#include "sensesp/sensors/sensor.h"
+#include "sensesp/signalk/signalk_output.h"
+#include "sensesp/system/lambda_consumer.h"
+#include "sensesp/transforms/repeat.h"
+#include "sensesp_app_builder.h"
+#include "sensesp/signalk/signalk_listener.h"
+#include "sensesp/signalk/signalk_put_request_listener.h"
+#include "sensesp/transforms/click_type.h"
+#include "sensesp/transforms/debounce.h"
+#include "sensesp/transforms/press_repeater.h"
+#include "sensesp_app.h"
+#include "sensesp/system/rgb_led.h"
+
 
 ////////////////////////////////////////////////////////////////
 
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
 
+const int BUZZER_PIN = 25; // or 15, but be consistent!
+// Timer for Black Water tank over 90%
+bool buzzer_enabled = true;
+unsigned long bw_over90_start = 0;
+bool buzzer_active = false;
+auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
+
 using namespace sensesp;
-// Test comment
+
 // The setup function performs one-time application initialization.
 void setup()
 {
     SetupLogging(ESP_LOG_DEBUG);
 
     epaper_init();
-    //////////////////////////////////////////////////////////////////////
 
     // Construct the global SensESPApp() object
     SensESPAppBuilder builder;
@@ -44,6 +76,7 @@ void setup()
                       ->get_app();
 
     // GPIO numbers to use for the analog inputs (linked to tank sensors)
+    const int BUZZER_PIN = 25; // Set to your actual buzzer GPIO pin
     const uint8_t kAnalogInputpin_1 = 33; // Stbd Fuel Tank
     const uint8_t kAnalogInputpin_2 = 34; // Port Fuel Tank
     const uint8_t kAnalogInputpin_3 = 39; // Black Water Tank
@@ -61,7 +94,14 @@ void setup()
         "tanks.freshWater.2.currentLevel"; // Stbd Fresh Water tank
     const char *sk_path_6 =
         "tanks.freshWater.3.currentLevel"; // Port Forward Fresh Water tank
+    
+    const char* sk_path_buzz = "electrical.switches.alarm.buzzer";
+    const char* sk_path_buzzer_alarm = "electrical.switches.alarm.buzzerAlarm";
+    
+    const char* config_path_sk_output = "/signalk/path";
+    const char* config_path_repeat = "/signalk/repeat";
 
+             
     // The "Configuration path" is combined with "/config" to formulate a URL
     // used by the RESTful API for retrieving or setting configuration data.
     // It is ALSO used to specify a path to the SPIFFS file system
@@ -255,6 +295,9 @@ void setup()
     input_calibration_6->connect_to(new SKOutputFloat(
         sk_path_6, "", new SKMetadata("ratio", "Port Fwd Water Tank")));
 
+    
+    SmartSwitchController* controllerBuz = new SmartSwitchController();
+
     /* To store the calibrated values in simple float variables,
     you can use lambda functions to update these variables whenever the values
     change*/
@@ -277,6 +320,18 @@ void setup()
     input_calibration_6->connect_to(new LambdaConsumer<float>(
         [](float value)
         { bV[5] = value; }));
+
+    
+    controllerBuz->connect_to(buzzer_switch);
+ 
+    auto* sk_listener_buzz = new StringSKPutRequestListener(sk_path_buzz);
+    
+    sk_listener_buzz->connect_to(new Repeat<bool, bool>(10000))
+      ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
+
+    buzzer_switch->connect_to(new Repeat<bool, bool>(10003))
+      ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
+  
 
     // Use RepeatSensor to call `updateTankValues` every 4 second
     event_loop()->onRepeat(
@@ -305,6 +360,33 @@ void setup()
             // Log the updated bar values to the terminal in tabular format
             Serial.println("  FS  FP  BW   PFFW   SFW   PAFW");
             Serial.printf("%4.2f %4.2f %4.2f %4.2f %4.2f %4.2f\n", bV[0], bV[1], bV[2], bV[3], bV[4], bV[5]);
+        });
+
+        event_loop()->onRepeat(
+        1000,
+        []()
+        {
+            float blackwater_pct = bV[2] * 100.0f;
+            unsigned long now = millis();
+            // Check if the Black Water tank is over 90% for more than 10 seconds
+            if (buzzer_enabled && bV[2] > 90.0f) {
+                if (bw_over90_start == 0) {
+                    bw_over90_start = millis(); // Start timer
+                } 
+                else if (millis() - bw_over90_start > 10000) { // 10 seconds
+                    if (!buzzer_active) {
+                        buzzer_switch->set(true); // Activate buzzer
+                        buzzer_active = true;
+                    }
+                }
+            } 
+            else {
+                bw_over90_start = 0; // Reset timer
+                if (buzzer_active) {
+                    buzzer_switch->set(false); // Deactivate buzzer
+                    buzzer_active = false;
+                }
+            }
         });
 }
 

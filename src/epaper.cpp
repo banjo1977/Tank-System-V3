@@ -1,8 +1,6 @@
 
 #include "epaper.h"
 
-
-
 // === BAR GRAPH CONFIGURATION ===
 #define BAR_HEIGHT 36
 #define BAR_SPACING_Y 8
@@ -13,11 +11,8 @@
 #define TICK_LENGTH 8
 #define TICK_THICKNESS 3 // Tick thickness
 
-
-
 GxIO_Class io(SPI, /*CS=*/D_CS_PIN, /*DC=*/D_DC_PIN, /*RST=*/D_RST_PIN);
 GxEPD_Class display(io, /*RST=*/D_RST_PIN, /*BUSY=*/D_BZ_PIN);
-
 
 // === STATUS AREA CONFIGURATION ===
 #define STATUS_HEIGHT 28 // Height for the status area
@@ -29,8 +24,7 @@ const char *barLabels[NUM_BARS] = {
     "Black Water",
     "Water Port Aft",
     "Water Port Fwd",
-    "Water Stbd"    
-    };
+    "Water Stbd"};
 
 uint8_t barValues[NUM_BARS] = {0, 0, 0, 0, 0, 0}; // Initial values for the bars
 
@@ -39,9 +33,8 @@ bool buzzerStatus = true;
 int wifiSignalLevel = -80; // Example signal level (in dBm)
 char lastUpdateTime[20];   // For storing the last update time
 
-
-
-void epaper_init(){
+void epaper_init()
+{
     SPI.begin(13, -1, 14, 15); // Use your custom SPI wiring!
     display.init(115200);
     delay(100);
@@ -53,9 +46,8 @@ void epaper_init(){
     epaper_statusArea();
 
     display.update();
-    display.powerDown();    
+    display.powerDown();
 }
-
 
 void epaper_barGraphs()
 {
@@ -226,14 +218,13 @@ void epaper_Arc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t sta
     }
 }
 
-
-
-void epaper_update(){
+void epaper_update()
+{
     epaper_barGraphs();
     epaper_statusArea();
     display.update();
 
-    // Update the time every loop 
+    // Update the time every loop
     second(); // Updates the real-time clock from TimeLib
     minute();
     hour();
@@ -241,12 +232,13 @@ void epaper_update(){
     month();
     year();
 }
-void epaper_refresh(){
+void epaper_refresh()
+{
     display.fillScreen(GxEPD_WHITE); // Clear the screen
 }
 
-
-void epaper_setValue(int idx, uint8_t value){
-    if(idx >= 0 && idx < NUM_BARS)
+void epaper_setValue(int idx, uint8_t value)
+{
+    if (idx >= 0 && idx < NUM_BARS)
         barValues[idx] = value;
 }
