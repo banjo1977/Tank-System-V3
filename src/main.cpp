@@ -41,8 +41,8 @@
 #include "sensesp_app.h"
 #include "sensesp/system/rgb_led.h"
 
-
-////////////////////////////////////////////////////////////////
+#define BUZ_CTRL_PIN 12 // Touch Pad 1
+#define DISPLAY_CTRL_PIN 2 // Touch Pad 2
 
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
@@ -62,6 +62,9 @@ void setup()
     SetupLogging(ESP_LOG_DEBUG);
 
     epaper_init();
+
+    pinMode(BUZ_CTRL_PIN, INPUT); // Set up the buzzer control pad
+    pinMode(DISPLAY_CTRL_PIN, INPUT); // Set up the display control pad
 
     // Construct the global SensESPApp() object
     SensESPAppBuilder builder;
@@ -386,6 +389,29 @@ void setup()
                     buzzer_switch->set(false); // Deactivate buzzer
                     buzzer_active = false;
                 }
+            }
+        });
+
+        event_loop()->onRepeat(
+        500,
+        []()
+        {
+            if(digitalRead(BUZ_CTRL_PIN) == HIGH) // Buzzer control pad pressed
+            {
+                
+                buzzer_enabled = false;                // Disable automatic buzzer logic
+                buzzer_switch->set(false);             // Immediately turn off the buzzer
+                buzzer_active = false;                 // Reset the active flag
+                epaper_setBuzzerIcon(false);           // Update the display icon (implement this function)
+                Serial.println("Buzzer turned OFF by touch!");
+            }
+
+            if(digitalRead(DISPLAY_CTRL_PIN) == HIGH) // Buzzer control pad pressed
+            {
+                epaper_update();
+                epaper_refresh();
+                refresh_counter = 0;
+                Serial.println("Display updated by touch!");
             }
         });
 }
