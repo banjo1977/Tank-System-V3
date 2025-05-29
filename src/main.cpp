@@ -336,9 +336,9 @@ void setup()
       ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
   
 
-    // Use RepeatSensor to call `updateTankValues` every 4 second
+    // Use RepeatSensor to call `updateTankValues` every 30 second
     event_loop()->onRepeat(
-        10000,
+        60000,
         []()
         {
             // Update barValues from bV (convert ratio to percentage)
@@ -352,8 +352,8 @@ void setup()
                 epaper_setValue(i, static_cast<uint8_t>(pct));
             }
 
-            // Perform a full screen refresh every 120 seconds (2 minutes)
-            if (refresh_counter++ > (30)) //  = 120/4
+            // Perform a full screen refresh every 30 minutes
+            if (refresh_counter++ > (30)) 
             {
                 refresh_counter = 0;
                 epaper_refresh();
