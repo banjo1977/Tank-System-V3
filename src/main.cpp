@@ -414,6 +414,23 @@ void setup()
                 Serial.println("Display updated by touch!");
             }
         });
+        
+        event_loop()->onRepeat(
+            200,
+            []()
+            {
+                static unsigned long both_pressed_start = 0;
+                if (digitalRead(BUZ_CTRL_PIN) == HIGH && digitalRead(DISPLAY_CTRL_PIN) == HIGH) {
+                    if (both_pressed_start == 0) {
+                        both_pressed_start = millis();
+                    } else if (millis() - both_pressed_start >= 5000) {
+                        Serial.println("Both buttons held for 5 seconds. Restarting ESP32...");
+                        ESP.restart();
+                    }
+                } else {
+                    both_pressed_start = 0;
+                }
+            }); 
 }
 
 void loop() { event_loop()->tick(); }

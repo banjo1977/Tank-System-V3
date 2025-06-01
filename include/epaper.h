@@ -11,6 +11,7 @@
 #include <WiFi.h>                    // For WiFi status
 #include <math.h>                    // For cos(), sin(), radians()
 
+
 #define D_RST_PIN 26
 #define D_DC_PIN 27
 #define D_CS_PIN 15

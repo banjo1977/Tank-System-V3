@@ -1,6 +1,11 @@
 
 #include "epaper.h"
 
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 3600;
+
 // === BAR GRAPH CONFIGURATION ===
 #define BAR_HEIGHT 36
 #define BAR_SPACING_Y 8
@@ -40,7 +45,10 @@ void epaper_init()
     delay(100);
 
     // Simulating time for testing purposes (You can replace this with real-time function)
-    setTime(0, 8, 23, 4, 5, 25); // 04/05/25 00:08:23
+    // setTime(0, 8, 23, 4, 5, 25); // 04/05/25 00:08:23
+
+
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
     epaper_barGraphs();
     epaper_statusArea();
@@ -121,6 +129,7 @@ void epaper_statusArea()
     epaper_buzzerIcon(10, STATUS_BASE_Y + 6, buzzerStatus);
 
     // Draw WiFi Signal Icon (WiFi signal strength)
+    wifiSignalLevel = WiFi.RSSI();
     epaper_wifiIcon(50, STATUS_BASE_Y + 0, wifiSignalLevel);
 
     // Set the font to bold for the update text
