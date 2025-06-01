@@ -42,7 +42,7 @@
 #include "sensesp/system/rgb_led.h"
 
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
-#define DISPLAY_CTRL_PIN 2 // Touch Pad 2
+#define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
@@ -70,7 +70,7 @@ void setup()
     SensESPAppBuilder builder;
     sensesp_app = (&builder)
                       // Set a custom hostname for the app.
-                      ->set_hostname("contour-tanksystem-v3.1")
+                      ->set_hostname("contour-tanksystem-v3.2")
                       // Optionally, hard-code the WiFi and Signal K server
                       // settings. This is normally not needed.
                       //->set_wifi_client("My WiFi SSID", "my_wifi_password")
@@ -336,9 +336,9 @@ void setup()
       ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
   
 
-    // Use RepeatSensor to call `updateTankValues` every 4 second
+    // Use RepeatSensor to call `updateTankValues` every 30 second
     event_loop()->onRepeat(
-        4000,
+        60000,
         []()
         {
             // Update barValues from bV (convert ratio to percentage)
@@ -352,8 +352,8 @@ void setup()
                 epaper_setValue(i, static_cast<uint8_t>(pct));
             }
 
-            // Perform a full screen refresh every 120 seconds (2 minutes)
-            if (refresh_counter++ > (30)) //  = 120/4
+            // Perform a full screen refresh every 30 minutes
+            if (refresh_counter++ > (30)) 
             {
                 refresh_counter = 0;
                 epaper_refresh();
