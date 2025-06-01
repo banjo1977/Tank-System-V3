@@ -398,12 +398,31 @@ void setup()
         {
             if(digitalRead(BUZ_CTRL_PIN) == HIGH) // Buzzer control pad pressed
             {
-                
-                buzzer_enabled = false;                // Disable automatic buzzer logic
-                buzzer_switch->set(false);             // Immediately turn off the buzzer
-                buzzer_active = false;                 // Reset the active flag
-                epaper_setBuzzerIcon(false);           // Update the display icon (implement this function)
-                Serial.println("Buzzer turned OFF by touch!");
+                if (buzzer_active) {
+                    // If BUZ_CTRL_PIN is HIGH and buzzer is currently on, turn it off
+                    buzzer_enabled = false;                // Disable automatic buzzer logic
+                    buzzer_switch->set(false);             // Immediately turn off the buzzer
+                    buzzer_active = false;                 // Reset the active flag
+                    epaper_setBuzzerIcon(false);           // Update the display icon (implement this function)
+                    Serial.println("Buzzer turned OFF by touch!");
+                } 
+                else {
+                    // If BUZ_CTRL_PIN is HIGH and buzzer is currently off, turn it on
+                    buzzer_enabled = true;                 // Enable automatic buzzer logic
+                    buzzer_switch->set(true);              // Turn on the buzzer
+                    buzzer_active = true;                  // Set the active flag
+                    epaper_setBuzzerIcon(true);            // Update the display icon
+                    Serial.println("Buzzer turned ON by touch!");
+                }
+            }
+
+            // If BUZ_CTRL_PIN is HIGH and buzzer is currently off, turn it on
+            else if (digitalRead(BUZ_CTRL_PIN) == HIGH && !buzzer_active) {
+                buzzer_enabled = true;                 // Enable automatic buzzer logic
+                buzzer_switch->set(true);              // Turn on the buzzer
+                buzzer_active = true;                  // Set the active flag
+                epaper_setBuzzerIcon(true);            // Update the display icon
+                Serial.println("Buzzer turned ON by touch!");
             }
 
             if(digitalRead(DISPLAY_CTRL_PIN) == HIGH) // Buzzer control pad pressed
