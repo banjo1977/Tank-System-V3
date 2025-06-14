@@ -44,8 +44,6 @@ void epaper_init()
     display.init(115200);
     delay(100);
 
-    // Simulating time for testing purposes (You can replace this with real-time function)
-    // setTime(0, 8, 23, 4, 5, 25); // 04/05/25 00:08:23
 
 
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);

@@ -70,7 +70,7 @@ void setup()
     SensESPAppBuilder builder;
     sensesp_app = (&builder)
                       // Set a custom hostname for the app.
-                      ->set_hostname("contour-tanksystem-v3.2")
+                      ->set_hostname("contour-tanksystem-v3.3")
                       // Optionally, hard-code the WiFi and Signal K server
                       // settings. This is normally not needed.
                       //->set_wifi_client("My WiFi SSID", "my_wifi_password")
