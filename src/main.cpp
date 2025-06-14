@@ -5,10 +5,9 @@
 // not include display which will be in v 3.1
 //  
 
-// ToDOo:
-// Add functionality for two touch-sensitive pads:
+// Functionality for two touch-sensitive pads:
 // Pad 1 - update the display now (ie, don't wait 120 seconds).
-// Pad 2 - Toggle the Buzzer function 'on' and 'off' and update the icon on the display.
+// Pad 2 - Toggle the Buzzer function 'on' and 'off' and update the icon on the display, then refresh the display.
 
 
 
@@ -50,6 +49,7 @@ int refresh_counter = 0;
 const int BUZZER_PIN = 25; // or 15, but be consistent!
 // Timer for Black Water tank over 90%
 bool buzzer_enabled = true;
+bool buzzerStatus = true; // variabe to control the buzzer icon. 
 unsigned long bw_over90_start = 0;
 bool buzzer_active = false;
 auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
@@ -403,20 +403,28 @@ void setup()
                     buzzer_enabled = false;                // Disable automatic buzzer logic
                     buzzer_switch->set(false);             // Immediately turn off the buzzer
                     buzzer_active = false;                 // Reset the active flag
-                    epaper_setBuzzerIcon(false);           // Update the display icon (implement this function)
+                    buzzerStatus = false; // Update the status variable
                     Serial.println("Buzzer turned OFF by touch!");
+                    epaper_update();
+                    epaper_refresh();
+                    refresh_counter = 0;
+                    Serial.println("Display updated to reflect Buzzer state change!");
                 } 
                 else {
                     // If BUZ_CTRL_PIN is HIGH and buzzer is currently off, turn it on
                     buzzer_enabled = true;                 // Enable automatic buzzer logic
                     buzzer_switch->set(true);              // Turn on the buzzer
                     buzzer_active = true;                  // Set the active flag
-                    epaper_setBuzzerIcon(true);            // Update the display icon
+                    buzzerStatus = true;           // Update the display icon
                     Serial.println("Buzzer turned ON by touch!");
+                    epaper_update();
+                    epaper_refresh();
+                    refresh_counter = 0;
+                    Serial.println("Display updated to reflect Buzzer state change!");
                 }
             }
 
-            if(digitalRead(DISPLAY_CTRL_PIN) == HIGH) // Buzzer control pad pressed
+            if(digitalRead(DISPLAY_CTRL_PIN) == HIGH) //  control pad pressed
             {
                 epaper_update();
                 epaper_refresh();
@@ -431,6 +439,8 @@ void setup()
             {
                 static unsigned long both_pressed_start = 0;
                 if (digitalRead(BUZ_CTRL_PIN) == HIGH && digitalRead(DISPLAY_CTRL_PIN) == HIGH) {
+                                             Serial.println("Both buttons pressed!");
+                    // If both buttons are pressed, start the timer
                     if (both_pressed_start == 0) {
                         both_pressed_start = millis();
                     } else if (millis() - both_pressed_start >= 5000) {

@@ -33,8 +33,9 @@ const char *barLabels[NUM_BARS] = {
 
 uint8_t barValues[NUM_BARS] = {0, 0, 0, 0, 0, 0}; // Initial values for the bars
 
-// Buzzer status and WiFi signal strength (Example data only)
-bool buzzerStatus = true;
+// link to global buzzerStatus variable. 
+extern bool buzzerStatus;
+// WiFi signal strength
 int wifiSignalLevel = -80; // Example signal level (in dBm)
 char lastUpdateTime[20];   // For storing the last update time
 
