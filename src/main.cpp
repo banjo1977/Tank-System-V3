@@ -46,13 +46,14 @@
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
 
-const int BUZZER_PIN = 25; // or 15, but be consistent!
+const int BUZZER_PIN = 21; // Pin 21 for buzzer control.
 // Timer for Black Water tank over 90%
 bool buzzer_enabled = true;
 bool buzzerStatus = true; // variabe to control the buzzer icon. 
 unsigned long bw_over90_start = 0;
+unsigned long buzzer_beep_until = 0; // Timer for buzzer beep duration
 bool buzzer_active = false;
-auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
+auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN); // inverted logic so must be 'On' for off and 'Off' for on....
 
 using namespace sensesp;
 
@@ -79,7 +80,6 @@ void setup()
                       ->get_app();
 
     // GPIO numbers to use for the analog inputs (linked to tank sensors)
-    const int BUZZER_PIN = 25; // Set to your actual buzzer GPIO pin
     const uint8_t kAnalogInputpin_1 = 33; // Stbd Fuel Tank
     const uint8_t kAnalogInputpin_2 = 34; // Port Fuel Tank
     const uint8_t kAnalogInputpin_3 = 39; // Black Water Tank
@@ -326,7 +326,8 @@ void setup()
 
     
     controllerBuz->connect_to(buzzer_switch);
- 
+    buzzer_switch->set(true); // Pin HIGH, buzzer OFF
+
     auto* sk_listener_buzz = new StringSKPutRequestListener(sk_path_buzz);
     
     sk_listener_buzz->connect_to(new Repeat<bool, bool>(10000))
@@ -378,7 +379,7 @@ void setup()
                 } 
                 else if (millis() - bw_over90_start > 10000) { // 10 seconds
                     if (!buzzer_active) {
-                        buzzer_switch->set(true); // Activate buzzer
+                        buzzer_switch->set(false); // Activate buzzer (inverted logic)
                         buzzer_active = true;
                     }
                 }
@@ -386,7 +387,7 @@ void setup()
             else {
                 bw_over90_start = 0; // Reset timer
                 if (buzzer_active) {
-                    buzzer_switch->set(false); // Deactivate buzzer
+                    buzzer_switch->set(true); // Deactivate buzzer (inverted logic)
                     buzzer_active = false;
                 }
             }
@@ -401,7 +402,7 @@ void setup()
                 if (buzzer_active) {
                     // If BUZ_CTRL_PIN is HIGH and buzzer is currently on, turn it off
                     buzzer_enabled = false;                // Disable automatic buzzer logic
-                    buzzer_switch->set(false);             // Immediately turn off the buzzer
+                    buzzer_switch->set(true);             // Immediately turn off the buzzer (inverted logic)
                     buzzer_active = false;                 // Reset the active flag
                     buzzerStatus = false; // Update the status variable
                     Serial.println("Buzzer turned OFF by touch!");
@@ -413,7 +414,8 @@ void setup()
                 else {
                     // If BUZ_CTRL_PIN is HIGH and buzzer is currently off, turn it on
                     buzzer_enabled = true;                 // Enable automatic buzzer logic
-                    buzzer_switch->set(true);              // Turn on the buzzer
+                    buzzer_switch->set(false);              // Turn on the buzzer (inverted logic)
+                    buzzer_beep_until = millis() + 200; // 200ms beep
                     buzzer_active = true;                  // Set the active flag
                     buzzerStatus = true;           // Update the display icon
                     Serial.println("Buzzer turned ON by touch!");
@@ -430,6 +432,8 @@ void setup()
                 epaper_refresh();
                 refresh_counter = 0;
                 Serial.println("Display updated by touch!");
+                buzzer_switch->set(false); // Activate buzzer (inverted logic)
+                buzzer_beep_until = millis() + 200; // 200ms beep
             }
         });
         
@@ -440,6 +444,7 @@ void setup()
                 static unsigned long both_pressed_start = 0;
                 if (digitalRead(BUZ_CTRL_PIN) == HIGH && digitalRead(DISPLAY_CTRL_PIN) == HIGH) {
                                              Serial.println("Both buttons pressed!");
+                                            buzzer_switch->set(false); // Activate buzzer (inverted logic)
                     // If both buttons are pressed, start the timer
                     if (both_pressed_start == 0) {
                         both_pressed_start = millis();
@@ -451,6 +456,17 @@ void setup()
                     both_pressed_start = 0;
                 }
             }); 
+
+
+            event_loop()->onRepeat(
+    50,
+    []() {
+        if (buzzer_beep_until > 0 && millis() > buzzer_beep_until) {
+            buzzer_switch->set(true); // Pin HIGH, buzzer OFF
+            buzzer_beep_until = 0;
+        }
+    }
+);
 }
 
 void loop() { event_loop()->tick(); }

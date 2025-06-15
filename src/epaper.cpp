@@ -179,12 +179,14 @@ void epaper_setBuzzerIcon(bool status)
 void epaper_wifiIcon(int16_t x, int16_t y, int signalStrength)
 {
     int numBars = 0;
-    if (signalStrength > -70)
-        numBars = 3; // Strong signal
-    else if (signalStrength > -80)
-        numBars = 2; // Moderate signal
-    else if (signalStrength > -90)
-        numBars = 1; // Weak signal
+    if (signalStrength > -55)
+        numBars = 3; // Excellent
+    else if (signalStrength > -65)
+        numBars = 2; // Good
+    else if (signalStrength > -75)
+        numBars = 1; // Fair
+    else
+        numBars = 0; // Weak/none
 
     int barSpacing = 6; // Wider spacing between bars
     int barWidth = 3;   // Thicker bars
