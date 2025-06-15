@@ -44,6 +44,8 @@
 
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
+#define LED_PIN 2  // Change to your board's LED GPIO if different
+
 
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
@@ -73,6 +75,9 @@ void setup()
     pinMode(DISPLAY_CTRL_PIN, INPUT); // Set up the display control pad
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, HIGH); // Ensure buzzer is OFF (HIGH) before anything else
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW); // Turn LED OFF (for most boards, LOW = off)
+
 
     // Construct the global SensESPApp() object
     SensESPAppBuilder builder;
@@ -456,6 +461,7 @@ void setup()
                         both_pressed_start = millis();
                     } else if (millis() - both_pressed_start >= 5000) {
                         Serial.println("Both buttons held for 5 seconds. Restarting ESP32...");
+                        digitalWrite(LED_PIN, HIGH); // Turn LED ON (for most boards, HIGH = on)
                         ESP.restart();
                     }
                 } else {
