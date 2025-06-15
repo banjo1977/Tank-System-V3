@@ -39,6 +39,8 @@
 #include "sensesp/transforms/press_repeater.h"
 #include "sensesp_app.h"
 #include "sensesp/system/rgb_led.h"
+#include <time.h>
+
 
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
@@ -46,14 +48,17 @@
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
 
-const int BUZZER_PIN = 21; // Pin 21 for buzzer control.
-// Timer for Black Water tank over 90%
+const int BUZZER_PIN = 19; // Pin 19 for buzzer control.
 bool buzzer_enabled = true;
-bool buzzerStatus = true; // variabe to control the buzzer icon. 
+bool buzzerStatus = false; // variabe to control the buzzer icon. 
 unsigned long bw_over90_start = 0;
 unsigned long buzzer_beep_until = 0; // Timer for buzzer beep duration
-bool buzzer_active = false;
+
+bool buzzer_active = true;
 auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN); // inverted logic so must be 'On' for off and 'Off' for on....
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 3600;
+
 
 using namespace sensesp;
 
@@ -66,6 +71,8 @@ void setup()
 
     pinMode(BUZ_CTRL_PIN, INPUT); // Set up the buzzer control pad
     pinMode(DISPLAY_CTRL_PIN, INPUT); // Set up the display control pad
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, HIGH); // Ensure buzzer is OFF (HIGH) before anything else
 
     // Construct the global SensESPApp() object
     SensESPAppBuilder builder;
@@ -326,7 +333,6 @@ void setup()
 
     
     controllerBuz->connect_to(buzzer_switch);
-    buzzer_switch->set(true); // Pin HIGH, buzzer OFF
 
     auto* sk_listener_buzz = new StringSKPutRequestListener(sk_path_buzz);
     
@@ -335,7 +341,7 @@ void setup()
 
     buzzer_switch->connect_to(new Repeat<bool, bool>(10003))
       ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
-  
+      buzzer_switch->set(true); // Pin HIGH, buzzer OFF
 
     // Use RepeatSensor to call `updateTankValues` every 30 second
     event_loop()->onRepeat(
@@ -459,12 +465,12 @@ void setup()
 
 
             event_loop()->onRepeat(
-    50,
-    []() {
-        if (buzzer_beep_until > 0 && millis() > buzzer_beep_until) {
-            buzzer_switch->set(true); // Pin HIGH, buzzer OFF
-            buzzer_beep_until = 0;
-        }
+                50,
+            []() {
+            if (buzzer_beep_until > 0 && millis() > buzzer_beep_until) {
+                buzzer_switch->set(true); // Pin HIGH, buzzer OFF
+                buzzer_beep_until = 0;
+            }
     }
 );
 }

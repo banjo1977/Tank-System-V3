@@ -2,10 +2,6 @@
 #include "epaper.h"
 
 
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 0;
-const int   daylightOffset_sec = 3600;
-
 // === BAR GRAPH CONFIGURATION ===
 #define BAR_HEIGHT 36
 #define BAR_SPACING_Y 8
@@ -44,10 +40,6 @@ void epaper_init()
     SPI.begin(13, -1, 14, 15); // Use your custom SPI wiring!
     display.init(115200);
     delay(100);
-
-
-
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
     epaper_barGraphs();
     epaper_statusArea();
@@ -135,8 +127,15 @@ void epaper_statusArea()
     display.setFont(&FreeSansBold9pt7b); // Bold font for "Update:" and date/time
 
     // Prepare the time/date text and a hyphen
-    snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %0d/%0d/%0d", hour(), minute(), second(), day(), month(), year());
-
+    //snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %0d/%0d/%0d", hour(), minute(), second(), day(), month(), year());
+    struct tm timeinfo;
+if (getLocalTime(&timeinfo)) {
+    snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%04d",
+        timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+        timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+} else {
+    snprintf(lastUpdateTime, sizeof(lastUpdateTime), "No Time");
+}
     // Set text color to white
     display.setTextColor(GxEPD_WHITE);
 
