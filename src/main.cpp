@@ -405,7 +405,7 @@ void setup()
         {
             if(digitalRead(BUZ_CTRL_PIN) == HIGH) // Buzzer control pad pressed
             {
-                if (buzzer_active) {
+                if (buzzer_enabled) {
                     // If BUZ_CTRL_PIN is HIGH and buzzer is currently on, turn it off
                     buzzer_enabled = false;                // Disable automatic buzzer logic
                     buzzer_switch->set(true);             // Immediately turn off the buzzer (inverted logic)
