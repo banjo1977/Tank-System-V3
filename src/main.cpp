@@ -65,7 +65,7 @@ using namespace sensesp;
 // The setup function performs one-time application initialization.
 void setup()
 {
-    SetupLogging(ESP_LOG_DEBUG);
+    SetupLogging(ESP_LOG_WARN);
 
     epaper_init();
 
