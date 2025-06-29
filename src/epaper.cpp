@@ -19,6 +19,8 @@ GxEPD_Class display(io, /*RST=*/D_RST_PIN, /*BUSY=*/D_BZ_PIN);
 #define STATUS_HEIGHT 28 // Height for the status area
 #define STATUS_BASE_Y (display.height() - STATUS_HEIGHT)
 
+extern const char* SOFTWARE_VERSION;
+
 const char *barLabels[NUM_BARS] = {
     "Fuel Stbd",
     "Fuel Port",

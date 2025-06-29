@@ -38,8 +38,10 @@
 #include "sensesp_app.h"
 #include "sensesp/system/rgb_led.h"
 #include <time.h>
+#include "sensesp/net/networking.h"
 
 
+const char* SOFTWARE_VERSION = "v5.0.0"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define LED_PIN 2  // Change to your board's LED GPIO if different
@@ -85,6 +87,15 @@ void setup()
 {
     SetupLogging(ESP_LOG_WARN);
 
+    Serial.print("Software version: ");
+    Serial.println(SOFTWARE_VERSION);
+
+    Serial.print("WiFi SSID: ");
+    Serial.println(WiFi.SSID());
+
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+
     epaper_init();
 
     pinMode(BUZ_CTRL_PIN, INPUT); // Set up the buzzer control pad
@@ -94,12 +105,29 @@ void setup()
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW); // Turn LED OFF (for most boards, LOW = off)
 
+    //report wifi details on connection 
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+        Serial.print("Network connected!\nSoftware version: ");
+        Serial.println(SOFTWARE_VERSION);
+
+        Serial.print("WiFi SSID: ");
+        Serial.println(WiFi.SSID());
+
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+    }
+    });
+
 
     // Construct the global SensESPApp() object
+    char hostname[64];
+    snprintf(hostname, sizeof(hostname), "contour-tanksystem-%s", SOFTWARE_VERSION);
+
     SensESPAppBuilder builder;
     sensesp_app = (&builder)
                       // Set a custom hostname for the app.
-                      ->set_hostname("contour-tanksystem-v3.3")
+                      ->set_hostname(hostname)
                       // Optionally, hard-code the WiFi and Signal K server
                       // settings. This is normally not needed.
                       //->set_wifi_client("My WiFi SSID", "my_wifi_password")
