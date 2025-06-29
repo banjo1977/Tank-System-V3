@@ -1,9 +1,14 @@
 // Signal K application template file.
 //
 // This is a line by line rebuild of the tank system
-// This will draw in pin connections and the analogue readings but at V 1 will
-// not include display which will be in v 3.1
-//  
+// V3.x - line by line rebuild, data only.
+// V4.x - Display on paper white display
+// V5.x - Add touch sensitive pads to control buzzer and display refresh.  ALso add clock (time form signalk)
+// V5.0.6 - Add IP address to boot status message and correct date to include 2 digit year.
+// And boot status message (IP address, software version, etc.)
+//  Need to:
+// validate function of touch sensors on real hardware (or swap for switches)
+// Amend the timing 
 
 // Functionality for two touch-sensitive pads:
 // Pad 1 - update the display now (ie, don't wait 120 seconds).
@@ -41,7 +46,7 @@
 #include "sensesp/net/networking.h"
 
 
-const char* SOFTWARE_VERSION = "v5.0.0"; // Update as needed
+const char* SOFTWARE_VERSION = "v5.0.6"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define LED_PIN 2  // Change to your board's LED GPIO if different
@@ -116,6 +121,16 @@ void setup()
 
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
+
+        extern bool show_boot_status;
+        extern String last_boot_status_ip;
+        if (show_boot_status) {
+            String new_ip = WiFi.localIP().toString();
+            if (last_boot_status_ip != new_ip) {
+                last_boot_status_ip = new_ip;
+                epaper_update(); // Redraw status bar with new IP
+            }
+        }
     }
     });
 
@@ -530,6 +545,18 @@ void setup()
                 buzzer_switch->set(true); // Pin HIGH, buzzer OFF
                 buzzer_beep_until = 0;
             }
+    }
+);
+
+    event_loop()->onRepeat(
+    1000,
+    []() {
+        extern bool show_boot_status;
+        extern unsigned long boot_status_start;
+        if (show_boot_status && millis() - boot_status_start > 15000) {
+            show_boot_status = false;
+            epaper_update(); // Redraw status bar with normal info
+        }
     }
 );
 }

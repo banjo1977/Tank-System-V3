@@ -1,5 +1,5 @@
-
 #include "epaper.h"
+#include <WiFi.h>
 
 
 // === BAR GRAPH CONFIGURATION ===
@@ -37,11 +37,18 @@ extern bool buzzerStatus;
 int wifiSignalLevel = -80; // Example signal level (in dBm)
 char lastUpdateTime[20];   // For storing the last update time
 
+bool show_boot_status = true;
+unsigned long boot_status_start = 0;
+String last_boot_status_ip = "";
+
 void epaper_init()
 {
     SPI.begin(13, -1, 14, 15); // Use your custom SPI wiring!
     display.init(115200);
     delay(100);
+
+    boot_status_start = millis();
+    show_boot_status = true;
 
     epaper_barGraphs();
     epaper_statusArea();
@@ -118,6 +125,20 @@ void epaper_statusArea()
     // Draw the status area (black background)
     display.fillRect(0, STATUS_BASE_Y, display.width(), STATUS_HEIGHT, GxEPD_BLACK);
 
+    // Show boot info for 15 seconds after boot
+    if (show_boot_status && millis() - boot_status_start < 15000) {
+        String current_ip = WiFi.localIP().toString();
+        display.setFont(&FreeSansBold9pt7b);
+        display.setTextColor(GxEPD_WHITE);
+        display.setCursor(10, STATUS_BASE_Y + 18);
+        display.print("Booting...");
+        display.print(SOFTWARE_VERSION);
+        display.print(" | ");
+        display.print(current_ip);
+        last_boot_status_ip = current_ip; // Track the last shown IP
+        return; // Skip normal status area for now
+    }
+
     // Draw Buzzer icon (example with status)
     epaper_buzzerIcon(10, STATUS_BASE_Y + 6, buzzerStatus);
 
@@ -136,9 +157,9 @@ void epaper_statusArea()
     //snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %0d/%0d/%0d", hour(), minute(), second(), day(), month(), year());
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
-        snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%04d",
+        snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%02d",
             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
-            timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+            timeinfo.tm_mday, timeinfo.tm_mon + 1, (timeinfo.tm_year + 1900) % 100);
             Serial.print("getLocalTime: ");
             Serial.println(asctime(&timeinfo));
     } else {
