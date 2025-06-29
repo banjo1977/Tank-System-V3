@@ -246,14 +246,6 @@ void epaper_update()
     epaper_barGraphs();
     epaper_statusArea();
     display.update();
-
-    // Update the time every loop
-    second(); // Updates the real-time clock from TimeLib
-    minute();
-    hour();
-    day();
-    month();
-    year();
 }
 void epaper_refresh()
 {

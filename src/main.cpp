@@ -12,7 +12,6 @@
 
 
 #include <memory>
-
 #include "sensesp.h"
 #include "sensesp/sensors/analog_input.h"
 #include "sensesp/sensors/sensor.h"
@@ -24,8 +23,6 @@
 #include "sensesp/signalk/signalk_value_listener.h"
 #include "sensesp/transforms/repeat.h"
 #include "epaper.h"
-
-
 #include "sensesp/controllers/smart_switch_controller.h"
 #include "sensesp/sensors/digital_input.h"
 #include "sensesp/sensors/sensor.h"
@@ -69,7 +66,9 @@ void set_time_from_signalk(String sk_time) {
     Serial.print("Received SK time: ");
     Serial.println(sk_time);
 
-    struct tm tm;
+    struct tm tm = {0};
+    // Parse ISO 8601 with numeric timezone offset
+    sk_time.trim();
     if (strptime(sk_time.c_str(), "%Y-%m-%dT%H:%M:%S", &tm) != NULL) {
         time_t t = mktime(&tm);
         struct timeval now = { .tv_sec = t };
@@ -110,7 +109,7 @@ void setup()
                       ->get_app();
     
     // Listen for Signal K environment.time and update system clock
-    auto* sk_time_listener = new SKValueListener<String>("/environment/time");    sk_time_listener->connect_to(new LambdaConsumer<String>([](String sk_time) {
+    auto* sk_time_listener = new SKValueListener<String>("environment.time");    sk_time_listener->connect_to(new LambdaConsumer<String>([](String sk_time) {
         set_time_from_signalk(sk_time);
     }));
 
