@@ -64,6 +64,8 @@ const int   daylightOffset_sec = 3600;
 
 using namespace sensesp;
 
+
+
 // The setup function performs one-time application initialization.
 void setup()
 {
@@ -89,8 +91,9 @@ void setup()
                       //->set_wifi_client("My WiFi SSID", "my_wifi_password")
                       //->set_wifi_access_point("My AP SSID", "my_ap_password")
                       //->set_sk_server("192.168.10.3", 80)
-                      ->get_app();
 
+                      ->get_app();
+    
     // GPIO numbers to use for the analog inputs (linked to tank sensors)
     const uint8_t kAnalogInputpin_1 = 33; // Stbd Fuel Tank
     const uint8_t kAnalogInputpin_2 = 34; // Port Fuel Tank
@@ -279,6 +282,9 @@ void setup()
         ->set_description("Analog input value adjustment.")
         ->set_sort_order(1100);
 
+    
+    // Subscribe to Signal K time from environment.time
+    // new SKTime("environment.time");
     // Connect the calibration output to the Signal K output.
     // This will send the calibrated value to the Signal K server
     // on the specified Signal K path. As part of

@@ -121,6 +121,10 @@ void epaper_statusArea()
 
     // Draw WiFi Signal Icon (WiFi signal strength)
     wifiSignalLevel = WiFi.RSSI();
+    for(int i = 1; i< 10; i++){
+        wifiSignalLevel += WiFi.RSSI();
+        wifiSignalLevel /= 2;
+    }
     epaper_wifiIcon(50, STATUS_BASE_Y + 0, wifiSignalLevel);
 
     // Set the font to bold for the update text
@@ -129,13 +133,13 @@ void epaper_statusArea()
     // Prepare the time/date text and a hyphen
     //snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %0d/%0d/%0d", hour(), minute(), second(), day(), month(), year());
     struct tm timeinfo;
-if (getLocalTime(&timeinfo)) {
-    snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%04d",
-        timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
-        timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
-} else {
-    snprintf(lastUpdateTime, sizeof(lastUpdateTime), "No Time");
-}
+    if (getLocalTime(&timeinfo)) {
+        snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%04d",
+            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+            timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+    } else {
+        snprintf(lastUpdateTime, sizeof(lastUpdateTime), "No Time");
+    }
     // Set text color to white
     display.setTextColor(GxEPD_WHITE);
 
