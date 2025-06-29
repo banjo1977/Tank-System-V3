@@ -21,6 +21,7 @@
 #include "sensesp_app_builder.h"
 #include "sensesp/sensors/digital_output.h"
 #include "sensesp/signalk/signalk_listener.h"
+#include "sensesp/signalk/signalk_value_listener.h"
 #include "sensesp/transforms/repeat.h"
 #include "epaper.h"
 
@@ -64,7 +65,21 @@ const int   daylightOffset_sec = 3600;
 
 using namespace sensesp;
 
+void set_time_from_signalk(String sk_time) {
+    Serial.print("Received SK time: ");
+    Serial.println(sk_time);
 
+    struct tm tm;
+    if (strptime(sk_time.c_str(), "%Y-%m-%dT%H:%M:%S", &tm) != NULL) {
+        time_t t = mktime(&tm);
+        struct timeval now = { .tv_sec = t };
+        settimeofday(&now, NULL);
+        Serial.print("System time set to: ");
+        Serial.println(asctime(&tm));
+    } else {
+        Serial.println("Failed to parse SK time string!");
+    }
+}
 
 // The setup function performs one-time application initialization.
 void setup()
@@ -94,6 +109,11 @@ void setup()
 
                       ->get_app();
     
+    // Listen for Signal K environment.time and update system clock
+    auto* sk_time_listener = new SKValueListener<String>("/environment/time");    sk_time_listener->connect_to(new LambdaConsumer<String>([](String sk_time) {
+        set_time_from_signalk(sk_time);
+    }));
+
     // GPIO numbers to use for the analog inputs (linked to tank sensors)
     const uint8_t kAnalogInputpin_1 = 33; // Stbd Fuel Tank
     const uint8_t kAnalogInputpin_2 = 34; // Port Fuel Tank

@@ -137,8 +137,12 @@ void epaper_statusArea()
         snprintf(lastUpdateTime, sizeof(lastUpdateTime), "%02d:%02d:%02d - %02d/%02d/%04d",
             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
             timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+            Serial.print("getLocalTime: ");
+            Serial.println(asctime(&timeinfo));
     } else {
         snprintf(lastUpdateTime, sizeof(lastUpdateTime), "No Time");
+        Serial.println("getLocalTime failed!");
+
     }
     // Set text color to white
     display.setTextColor(GxEPD_WHITE);
