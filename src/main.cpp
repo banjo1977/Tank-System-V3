@@ -6,6 +6,7 @@
 // V5.x - Add touch sensitive pads to control buzzer and display refresh.  ALso add clock (time form signalk)
 // V5.0.6 - Add IP address to boot status message and correct date to include 2 digit year.
 // And boot status message (IP address, software version, etc.)
+// V5.0.7 - Amend touch logic - debounce and improe response.
 //  Need to:
 // validate function of touch sensors on real hardware (or swap for switches)
 // Amend the timing 
@@ -46,9 +47,10 @@
 #include "sensesp/net/networking.h"
 
 
-const char* SOFTWARE_VERSION = "v5.0.6"; // Update as needed
+const char* SOFTWARE_VERSION = "v5.0.7"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
+#define TOUCH_THRESHOLD 17 // Define threshold for touch sensitivity
 #define LED_PIN 2  // Change to your board's LED GPIO if different
 
 
@@ -65,6 +67,9 @@ bool buzzer_active = true;
 auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN); // inverted logic so must be 'On' for off and 'Off' for on....
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 3600;
+// Debounce state for touch pads
+static bool last_buz_state = false;
+static bool last_disp_state = false;
 
 
 using namespace sensesp;
@@ -80,8 +85,8 @@ void set_time_from_signalk(String sk_time) {
         time_t t = mktime(&tm);
         struct timeval now = { .tv_sec = t };
         settimeofday(&now, NULL);
-        Serial.print("System time set to: ");
-        Serial.println(asctime(&tm));
+        //Serial.print("System time set to: ");
+        //Serial.println(asctime(&tm));
     } else {
         Serial.println("Failed to parse SK time string!");
     }
@@ -473,58 +478,57 @@ void setup()
         });
 
         event_loop()->onRepeat(
-        500,
-        []()
-        {
-            if(digitalRead(BUZ_CTRL_PIN) == HIGH) // Buzzer control pad pressed
-            {
-                if (buzzer_enabled) {
-                    // If BUZ_CTRL_PIN is HIGH and buzzer is currently on, turn it off
-                    buzzer_enabled = false;                // Disable automatic buzzer logic
-                    buzzer_switch->set(true);             // Immediately turn off the buzzer (inverted logic)
-                    buzzer_active = false;                 // Reset the active flag
-                    buzzerStatus = false; // Update the status variable
-                    Serial.println("Buzzer turned OFF by touch!");
-                    epaper_update();
-                    epaper_refresh();
-                    refresh_counter = 0;
-                    Serial.println("Display updated to reflect Buzzer state change!");
-                } 
-                else {
-                    // If BUZ_CTRL_PIN is HIGH and buzzer is currently off, turn it on
-                    buzzer_enabled = true;                 // Enable automatic buzzer logic
-                    buzzer_switch->set(false);              // Turn on the buzzer (inverted logic)
-                    buzzer_beep_until = millis() + 200; // 200ms beep
-                    buzzer_active = true;                  // Set the active flag
-                    buzzerStatus = true;           // Update the display icon
-                    Serial.println("Buzzer turned ON by touch!");
-                    epaper_update();
-                    epaper_refresh();
-                    refresh_counter = 0;
-                    Serial.println("Display updated to reflect Buzzer state change!");
-                }
-            }
-
-            if(digitalRead(DISPLAY_CTRL_PIN) == HIGH) //  control pad pressed
-            {
-                epaper_update();
-                epaper_refresh();
-                refresh_counter = 0;
-                Serial.println("Display updated by touch!");
-                buzzer_switch->set(false); // Activate buzzer (inverted logic)
-                buzzer_beep_until = millis() + 200; // 200ms beep
-            }
-        });
-        
-        event_loop()->onRepeat(
-            200,
+            20, // Poll every 20 ms for better responsiveness
             []()
             {
+                int buz_val = touchRead(BUZ_CTRL_PIN);
+                int disp_val = touchRead(DISPLAY_CTRL_PIN);
+                bool buz_now = buz_val < TOUCH_THRESHOLD;
+                bool disp_now = disp_val < TOUCH_THRESHOLD;
+                 // Debug: print touch values
+                 // Serial.printf("Buz: %d, Disp: %d\n", buz_val, disp_val);
+
+                // Buzzer pad pressed (rising edge)
+                if (buz_now && !last_buz_state) {
+                    if (buzzer_enabled) {
+                        buzzer_enabled = false;
+                        buzzer_switch->set(true); // Immediately turn off the buzzer (inverted logic)
+                        buzzer_active = false;
+                        buzzerStatus = false;
+                        Serial.println("Buzzer turned OFF by touch!");
+                        epaper_update();
+                        epaper_refresh();
+                        refresh_counter = 0;
+                        Serial.println("Display updated to reflect Buzzer state change!");
+                    } else {
+                        buzzer_enabled = true;
+                        buzzer_switch->set(false); // Turn on the buzzer (inverted logic)
+                        buzzer_beep_until = millis() + 200; // 200ms beep
+                        buzzer_active = true;
+                        buzzerStatus = true;
+                        Serial.println("Buzzer turned ON by touch!");
+                        epaper_update();
+                        epaper_refresh();
+                        refresh_counter = 0;
+                        Serial.println("Display updated to reflect Buzzer state change!");
+                    }
+                }
+        
+                // Display pad pressed (rising edge)
+                if (disp_now && !last_disp_state) {
+                    epaper_update();
+                    epaper_refresh();
+                    refresh_counter = 0;
+                    Serial.println("Display updated by touch!");
+                    //buzzer_switch->set(false); // Activate buzzer (inverted logic)
+                    //buzzer_beep_until = millis() + 200; // 200ms beep
+                }
+        
+                // Both pads pressed (rising edge)
                 static unsigned long both_pressed_start = 0;
-                if (digitalRead(BUZ_CTRL_PIN) == HIGH && digitalRead(DISPLAY_CTRL_PIN) == HIGH) {
-                                             Serial.println("Both buttons pressed!");
-                                            buzzer_switch->set(false); // Activate buzzer (inverted logic)
-                    // If both buttons are pressed, start the timer
+                if (buz_now && disp_now) {
+                    Serial.println("Both buttons pressed!");
+                    buzzer_switch->set(false); // Activate buzzer (inverted logic)
                     if (both_pressed_start == 0) {
                         both_pressed_start = millis();
                     } else if (millis() - both_pressed_start >= 5000) {
@@ -535,18 +539,11 @@ void setup()
                 } else {
                     both_pressed_start = 0;
                 }
-            }); 
-
-
-            event_loop()->onRepeat(
-                50,
-            []() {
-            if (buzzer_beep_until > 0 && millis() > buzzer_beep_until) {
-                buzzer_switch->set(true); // Pin HIGH, buzzer OFF
-                buzzer_beep_until = 0;
+        
+                last_buz_state = buz_now;
+                last_disp_state = disp_now;
             }
-    }
-);
+        );
 
     event_loop()->onRepeat(
     1000,
