@@ -2,17 +2,17 @@
 //
 // This is a line by line rebuild of the tank system
 // V3.x - line by line rebuild, data only.
-// V4.x - Display on paper white display
-// V5.x - Add touch sensitive pads to control buzzer and display refresh.  ALso add clock (time form signalk)
-// V5.0.6 - Add IP address to boot status message and correct date to include 2 digit year.
+// V3.1 - Display on paper white display
+// V3.2 - Add touch sensitive pads to control buzzer and display refresh.  ALso add clock (time form signalk)
+// V3.3 - Add IP address to boot status message and correct date to include 2 digit year.
 // And boot status message (IP address, software version, etc.)
-// V5.0.7 - Amend touch logic - debounce and improe response.
+// V3.3.2- Amend touch logic - debounce and improve response.
 //  Need to:
 // validate function of touch sensors on real hardware (or swap for switches)
 // Amend the timing 
 
 // Functionality for two touch-sensitive pads:
-// Pad 1 - update the display now (ie, don't wait 120 seconds).
+// Pad 1 - update the display now (ie, don't wait 60 seconds).
 // Pad 2 - Toggle the Buzzer function 'on' and 'off' and update the icon on the display, then refresh the display.
 
 
@@ -47,7 +47,7 @@
 #include "sensesp/net/networking.h"
 
 
-const char* SOFTWARE_VERSION = "v5.0.7"; // Update as needed
+const char* SOFTWARE_VERSION = "v3-3-2"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define TOUCH_THRESHOLD 17 // Define threshold for touch sensitivity
@@ -421,7 +421,7 @@ void setup()
       ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
       buzzer_switch->set(true); // Pin HIGH, buzzer OFF
 
-    // Use RepeatSensor to call `updateTankValues` every 30 second
+    // Use RepeatSensor to call `updateTankValues` every 60 second
     event_loop()->onRepeat(
         60000,
         []()
