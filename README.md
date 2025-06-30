@@ -1,27 +1,26 @@
-Contour Tank System upgrade
-Contour tank system is a SENSESP instantiaton which takes readings from 6 analogue inputs:
-3 x fresh water tanks
-2 x fuel tanks
-1 x black water (sewage) tank.
+Contour Tank System upgrade Contour tank system is a SENSESP instantiaton which takes readings from 6 analogue inputs: 3 x fresh water tanks 2 x fuel tanks 1 x black water (sewage) tank.
 
-The tanks are read by barometic pressure sensing devices which output 0-5vDC.  A resistor network converts this to 0-3v. 
+The tanks are read by barometic pressure sensing devices which output 0-5vDC.
 
-The SENSESP framework outputs these values to the SENSESP server which is connected on a WIFI lan. This system works extremely well. 
+The SENSESP framework outputs these values to the SENSESP server which is connected on a WIFI lan. This system works extremely well.
 
-HOWEVER - I want the tank level display to be visible regardless of whether the server is working; and for there to be an independent buzzer.  The status of this buzzer can be addressable via Signal K.  (I have an example of this that I can send you).
+HOWEVER - the server can fail and we want to ensure independent visibility of the tank level, regardless of whether the server is operating. We also want there to be an independent buzzer.
 
-The following functions are (in theory) available in hardware as built but not instantiated in software:
-Paperwhite display (1 every 120 second update of tank levels (0-100%) using bar graph)
-Buzzer (to be triggered by black water tank, but also cancelled by signalK input if required)  To be reflected as a signal K remote relay.
-2 x touch sensors.  For use as required (maybe 1 is used to silence the buzzer, the other is used to toggle or refresh the display).
+As such:
 
-You have the details of the paper white display. 
+Data from the tanks is averaged and output to bar graphs on a 4.2" e-paper display
 
-This image shows the current pin usage; you may advise that this needs to change. 
+The display updates every 60 seconds
 
-The touch sensors are wired up as per guidance; I have proven that they work in hardware (ie I’ve been able to detect ‘touched’ or not, but I’ve not been able to integrate this into functionality and I was not able to make the display work.
+If the 'display update' touch pin is activated (connected to a screw on the case) the display is updated.
 
-I will send the current version of the software (which works)
+If the black wate tank exceeds a certain level, then the buzzer will be activated IF the buzzer function is enabled (this is controlled by a second touch pin).
 
-If you need hardware to prototype - especially the display, I’m happy to fund that. 
-link: https://docs.google.com/document/d/1ol7EuxyLQOXvyz_BNhHbE6N20tq0fCEktmN29jaxFCo/edit?pli=1&tab=t.0
+The display also includes an icon for buzzer on / off, an icon showing wifi signal strenght, and a status line which:
+
+on boot displays software version number and IP address
+Thereafter displays the last update time of the tank data. Time is drawn from the signalk server.
+TO DO:
+
+Shift accross to a good display front-lit e-paper display
+activate the front light for a defined period of time when the button is touched
