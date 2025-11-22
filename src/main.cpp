@@ -10,6 +10,7 @@
 //  Need to:
 // validate function of touch sensors on real hardware (or swap for switches)
 // Amend the timing 
+// V3.4 - roll out, correct logic, analogue input faults. 
 
 // Functionality for two touch-sensitive pads:
 // Pad 1 - update the display now (ie, don't wait 60 seconds).
@@ -45,9 +46,10 @@
 #include "sensesp/system/rgb_led.h"
 #include <time.h>
 #include "sensesp/net/networking.h"
+#include "esp_task_wdt.h"
 
 
-const char* SOFTWARE_VERSION = "v3-3-2"; // Update as needed
+const char* SOFTWARE_VERSION = "v3-4"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define TOUCH_THRESHOLD 17 // Define threshold for touch sensitivity
@@ -70,7 +72,8 @@ const int   daylightOffset_sec = 3600;
 // Debounce state for touch pads
 static bool last_buz_state = false;
 static bool last_disp_state = false;
-
+unsigned long last_epaper_update = 0;
+const unsigned long epaper_update_delay = 500; // Minimum 500ms between updates
 
 using namespace sensesp;
 
@@ -105,13 +108,17 @@ void setup()
 
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-
+   
+    // esp_task_wdt_delete(NULL); // Disable WDT temporarily
+    esp_task_wdt_init(10, true);  // 10 second timeout instead of default ~5 seconds to cope with epaper
     epaper_init();
 
     pinMode(BUZ_CTRL_PIN, INPUT); // Set up the buzzer control pad
     pinMode(DISPLAY_CTRL_PIN, INPUT); // Set up the display control pad
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, HIGH); // Ensure buzzer is OFF (HIGH) before anything else
+    buzzerStatus = false;  // <-- ADD THIS LINE to match the actual state (buzzer is OFF)
+    buzzer_switch->set(true); // Pin HIGH, buzzer OFF
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW); // Turn LED OFF (for most boards, LOW = off)
 
@@ -426,55 +433,44 @@ void setup()
         60000,
         []()
         {
-            // Update barValues from bV (convert ratio to percentage)
-            for (int i = 0; i < NUM_BARS; i++)
-            {
-                float pct = bV[i] * 100.0f;
-                if (pct < 0)
-                    pct = 0;
-                if (pct > 100)
-                    pct = 100;
-                epaper_setValue(i, static_cast<uint8_t>(pct));
-            }
-
             // Perform a full screen refresh every 30 minutes
             if (refresh_counter++ > (30)) 
             {
                 refresh_counter = 0;
-                epaper_refresh();
+                epaper_refresh();  // This now handles everything
+            } else {
+                epaper_update();   // Fast partial update
             }
-            epaper_update();
 
             // Log the updated bar values to the terminal in tabular format
             Serial.println("  FS  FP  BW   PFFW   SFW   PAFW");
             Serial.printf("%4.2f %4.2f %4.2f %4.2f %4.2f %4.2f\n", bV[0], bV[1], bV[2], bV[3], bV[4], bV[5]);
+            
+      
         });
 
         event_loop()->onRepeat(
         1000,
         []()
         {
-            float blackwater_pct = bV[2] * 100.0f;
-            unsigned long now = millis();
-            // Check if the Black Water tank is over 90% for more than 10 seconds
-            if (buzzer_enabled && bV[2] > 90.0f) {
-                if (bw_over90_start == 0) {
-                    bw_over90_start = millis(); // Start timer
-                } 
-                else if (millis() - bw_over90_start > 10000) { // 10 seconds
-                    if (!buzzer_active) {
-                        buzzer_switch->set(false); // Activate buzzer (inverted logic)
+            // Only auto-trigger buzzer if user hasn't manually disabled it
+            if (buzzer_enabled) {
+                if (bV[2] > 0.90f) {  // Black water > 90%
+                    if (bw_over90_start == 0) {
+                        bw_over90_start = millis();
+                    } 
+                    else if (millis() - bw_over90_start > 10000) { // 10 seconds
+                        buzzer_switch->set(false); // Activate buzzer
                         buzzer_active = true;
                     }
-                }
-            } 
-            else {
-                bw_over90_start = 0; // Reset timer
-                if (buzzer_active) {
-                    buzzer_switch->set(true); // Deactivate buzzer (inverted logic)
+                } 
+                else {
+                    bw_over90_start = 0;
+                    buzzer_switch->set(true); // Deactivate buzzer
                     buzzer_active = false;
                 }
             }
+            // If buzzer_enabled is FALSE, do NOTHING - respect user's manual disable
         });
 
         event_loop()->onRepeat(
@@ -492,52 +488,91 @@ void setup()
                 if (buz_now && !last_buz_state) {
                     if (buzzer_enabled) {
                         buzzer_enabled = false;
-                        buzzer_switch->set(true); // Immediately turn off the buzzer (inverted logic)
+                        buzzer_switch->set(true);
                         buzzer_active = false;
                         buzzerStatus = false;
                         Serial.println("Buzzer turned OFF by touch!");
-                        epaper_update();
-                        epaper_refresh();
-                        refresh_counter = 0;
-                        Serial.println("Display updated to reflect Buzzer state change!");
+                        if (millis() - last_epaper_update > epaper_update_delay) {
+                            epaper_update();
+                            last_epaper_update = millis();
+                            refresh_counter = 0;
+                            Serial.println("Display updated to reflect Buzzer state change!");
+                        }
                     } else {
                         buzzer_enabled = true;
-                        buzzer_switch->set(false); // Turn on the buzzer (inverted logic)
-                        buzzer_beep_until = millis() + 200; // 200ms beep
+                        buzzer_switch->set(false);
+                        buzzer_beep_until = millis() + 200;
                         buzzer_active = true;
                         buzzerStatus = true;
                         Serial.println("Buzzer turned ON by touch!");
-                        epaper_update();
-                        epaper_refresh();
-                        refresh_counter = 0;
-                        Serial.println("Display updated to reflect Buzzer state change!");
+                        if (millis() - last_epaper_update > epaper_update_delay) {
+                            epaper_update();
+                            last_epaper_update = millis();
+                            refresh_counter = 0;
+                            Serial.println("Display updated to reflect Buzzer state change!");
+                        }
                     }
                 }
         
                 // Display pad pressed (rising edge)
                 if (disp_now && !last_disp_state) {
-                    epaper_update();
-                    epaper_refresh();
-                    refresh_counter = 0;
-                    Serial.println("Display updated by touch!");
-                    //buzzer_switch->set(false); // Activate buzzer (inverted logic)
-                    //buzzer_beep_until = millis() + 200; // 200ms beep
+                    if (millis() - last_epaper_update > epaper_update_delay) {
+                        epaper_update();
+                        last_epaper_update = millis();
+                        refresh_counter = 0;
+                        Serial.println("Display updated by touch!");
+                        
+                        // Debug output...
+                        Serial.println("\n========== TANK VALUES (0-1 ratio) ==========");
+                        Serial.printf("Stbd Fuel Tank:           %f\n", bV[0]);
+                        Serial.printf("Port Fuel Tank:           %f\n", bV[1]);
+                        Serial.printf("Black Water Tank:         %f\n", bV[2]);
+                        Serial.printf("Port Aft Fresh Water:     %f\n", bV[3]);
+                        Serial.printf("Stbd Fresh Water Tank:    %f\n", bV[4]);
+                        Serial.printf("Port Forward Fresh Water: %f\n", bV[5]);
+                        Serial.println("===========================================\n");
+                        
+                    } else {
+                        Serial.println("Display update skipped - too soon after last update");
+                    }
                 }
         
                 // Both pads pressed (rising edge)
                 static unsigned long both_pressed_start = 0;
+                static bool both_pressed_buzzer_activated = false;
+                static bool restart_triggered = false;  // <-- ADD THIS FLAG
+
                 if (buz_now && disp_now) {
-                    Serial.println("Both buttons pressed!");
-                    buzzer_switch->set(false); // Activate buzzer (inverted logic)
                     if (both_pressed_start == 0) {
                         both_pressed_start = millis();
-                    } else if (millis() - both_pressed_start >= 5000) {
+                        both_pressed_buzzer_activated = false;
+                        restart_triggered = false;  // <-- ADD THIS
+                        Serial.println("Both buttons pressed!");
+                    }
+                    
+                    // Activate buzzer once after first detection
+                    if (!both_pressed_buzzer_activated) {
+                        buzzer_switch->set(false); // Activate buzzer ONCE
+                        both_pressed_buzzer_activated = true;
+                    }
+                    
+                    // Check for 5-second hold - only trigger ONCE
+                    if (!restart_triggered && millis() - both_pressed_start >= 5000) {
+                        restart_triggered = true;  // <-- ADD THIS to prevent re-triggering
                         Serial.println("Both buttons held for 5 seconds. Restarting ESP32...");
-                        digitalWrite(LED_PIN, HIGH); // Turn LED ON (for most boards, HIGH = on)
+                        Serial.flush();  // <-- Flush serial buffer before restart
+                        
+                        // Give a brief visual/audio feedback before restart
+                        digitalWrite(LED_PIN, HIGH);
+                        buzzer_switch->set(false); // Buzzer continues
+                        delay(500);  // Brief delay to ensure restart command is processed
+                        
                         ESP.restart();
                     }
                 } else {
                     both_pressed_start = 0;
+                    both_pressed_buzzer_activated = false;
+                    restart_triggered = false;  // <-- RESET ON RELEASE
                 }
         
                 last_buz_state = buz_now;
@@ -556,6 +591,13 @@ void setup()
         }
     }
 );
+
+    Serial.print("Free heap after app init: ");
+    Serial.println(ESP.getFreeHeap());
+
+    // Check if any blocking delays are in setup()
+    // Look for: delay(xxx), long loops, heavy processing
+
 }
 
 void loop() { event_loop()->tick(); }

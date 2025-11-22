@@ -266,13 +266,26 @@ void epaper_Arc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t sta
 
 void epaper_update()
 {
+    extern float bV[NUM_BARS];
+    
+    // Sync barValues from bV
+    for (int i = 0; i < NUM_BARS; i++) {
+        float pct = bV[i] * 100.0f;
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        barValues[i] = static_cast<uint8_t>(pct);
+    }
+    
     epaper_barGraphs();
     epaper_statusArea();
     display.update();
+    display.powerDown();  // <-- ADD THIS
 }
 void epaper_refresh()
 {
-    display.fillScreen(GxEPD_WHITE); // Clear the screen
+    display.fillScreen(GxEPD_WHITE);
+    epaper_update();  // This now includes powerDown()
+    // No need for additional powerDown() here since epaper_update() now does it
 }
 
 void epaper_setValue(int idx, uint8_t value)

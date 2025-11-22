@@ -13,9 +13,9 @@
 
 
 #define D_RST_PIN 26
-#define D_DC_PIN 27
-#define D_CS_PIN 15
-#define D_BZ_PIN 25
+#define D_DC_PIN 27 
+#define D_CS_PIN 15 
+#define D_BZ_PIN 25 
 
 #define NUM_BARS 6
 
