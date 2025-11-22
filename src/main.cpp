@@ -159,17 +159,18 @@ void setup()
     buzzerStatus = buzzer_enabled; // icon shows enabled state
     buzzer_active = false;
     buzzer_sounding = false;
-    buzzer_switch->set(true); // ensure DigitalOutput mirrors OFF
 
     // construct DigitalOutput here (after hardware pin driven to safe state)
     buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
     buzzer_switch->set(true); // mirror hardware OFF (HIGH)
     // ensure internal software state also reflects OFF
-    buzzer_sounding = false;
     setBuzzerOutput(false);
 
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    // record boot time for startup alarm suppression
+    boot_time = millis();
 
     //report wifi details on connection 
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
