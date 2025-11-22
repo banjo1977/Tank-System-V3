@@ -60,22 +60,58 @@ float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
 
 const int BUZZER_PIN = 19; // Pin 19 for buzzer control.
-bool buzzer_enabled = true;
-bool buzzerStatus = false; // variabe to control the buzzer icon. 
+bool buzzer_enabled = true;      // user preference (icon reflects this)
+bool buzzerStatus = true;        // icon: shows enabled/disabled (true = enabled icon)
 unsigned long bw_over90_start = 0;
-unsigned long buzzer_beep_until = 0; // Timer for buzzer beep duration
+unsigned long buzzer_beep_until = 0; // Timer for short beep after manual enable
 
-bool buzzer_active = true;
-auto buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN); // inverted logic so must be 'On' for off and 'Off' for on....
-const long  gmtOffset_sec = 0;
-const int   daylightOffset_sec = 3600;
+bool buzzer_active = false;      // indicates alarm-driven sounding (not used for icon)
+static bool buzzer_sounding = false; // actual physical output state (true = sounding)
+std::shared_ptr<sensesp::DigitalOutput> buzzer_switch;
+
+// Non-blocking restart scheduling
+static unsigned long both_pressed_start = 0;
+static bool both_pressed_buzzer_activated = false;
+static bool restart_scheduled = false;
+static unsigned long restart_scheduled_at = 0;
+static const unsigned long RESTART_HOLD_MS = 5000;   // hold duration to request restart
+static const unsigned long RESTART_FEEDBACK_MS = 500; // feedback period before actual restart
+
 // Debounce state for touch pads
 static bool last_buz_state = false;
 static bool last_disp_state = false;
 unsigned long last_epaper_update = 0;
 const unsigned long epaper_update_delay = 500; // Minimum 500ms between updates
 
+// Add at the top with other globals:
+unsigned long boot_time = 0;
+const unsigned long ALARM_STARTUP_DELAY = 30000; // 30 seconds before alarm checks
+
 using namespace sensesp;
+
+// Helper to control buzzer output; `on = true` means buzzer sounding.
+// Hardware: buzzer is active LOW (LOW = ON), HIGH = OFF.
+void setBuzzerOutput(bool on) {
+    // Avoid redundant operations
+    if (buzzer_sounding == on) {
+        return;
+    }
+    buzzer_sounding = on;
+
+    if (on) {
+        // Activate buzzer (active low)
+        digitalWrite(BUZZER_PIN, LOW);
+        if (buzzer_switch) {
+            buzzer_switch->set(false); // mirror physical pin state (LOW)
+        }
+    } else {
+        // Deactivate buzzer (safe off = HIGH)
+        digitalWrite(BUZZER_PIN, HIGH);
+        if (buzzer_switch) {
+            buzzer_switch->set(true); // mirror physical pin state (HIGH)
+        }
+    }
+}
 
 void set_time_from_signalk(String sk_time) {
     Serial.print("Received SK time: ");
@@ -115,12 +151,25 @@ void setup()
 
     pinMode(BUZ_CTRL_PIN, INPUT); // Set up the buzzer control pad
     pinMode(DISPLAY_CTRL_PIN, INPUT); // Set up the display control pad
+
+    // initialize buzzer hardware & software state (synchronized)
     pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, HIGH); // Ensure buzzer is OFF (HIGH) before anything else
-    buzzerStatus = false;  // <-- ADD THIS LINE to match the actual state (buzzer is OFF)
-    buzzer_switch->set(true); // Pin HIGH, buzzer OFF
+    digitalWrite(BUZZER_PIN, HIGH); // ensure safe off level on boot (hardware HIGH = OFF)
+    buzzer_enabled = true;
+    buzzerStatus = buzzer_enabled; // icon shows enabled state
+    buzzer_active = false;
+    buzzer_sounding = false;
+    buzzer_switch->set(true); // ensure DigitalOutput mirrors OFF
+
+    // construct DigitalOutput here (after hardware pin driven to safe state)
+    buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
+    buzzer_switch->set(true); // mirror hardware OFF (HIGH)
+    // ensure internal software state also reflects OFF
+    buzzer_sounding = false;
+    setBuzzerOutput(false);
+
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW); // Turn LED OFF (for most boards, LOW = off)
+    digitalWrite(LED_PIN, LOW);
 
     //report wifi details on connection 
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -398,24 +447,17 @@ void setup()
     change*/
 
     input_calibration_1->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[0] = value; }));
+        [](float value) { bV[0] = value; })); // Stbd Fuel
     input_calibration_2->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[1] = value; }));
+        [](float value) { bV[1] = value; })); // Port Fuel
     input_calibration_3->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[2] = value; }));
+        [](float value) { bV[2] = value; })); // Black Water
     input_calibration_4->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[3] = value; }));
+        [](float value) { bV[3] = value; })); // Port Aft Fresh Water
     input_calibration_5->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[4] = value; }));
+        [](float value) { bV[5] = value; })); // Port Forward Fresh Water (SWAPPED)
     input_calibration_6->connect_to(new LambdaConsumer<float>(
-        [](float value)
-        { bV[5] = value; }));
-
+        [](float value) { bV[4] = value; })); // Stbd Fresh Water (SWAPPED)
     
     controllerBuz->connect_to(buzzer_switch);
 
@@ -453,24 +495,35 @@ void setup()
         1000,
         []()
         {
-            // Only auto-trigger buzzer if user hasn't manually disabled it
+            // Skip auto-alarm check for 30 seconds after boot (allows sensors to stabilize)
+            if (millis() - boot_time < ALARM_STARTUP_DELAY) {
+                return;
+            }
+
+            // Auto-alarm: only sound if user has enabled the buzzer function
             if (buzzer_enabled) {
                 if (bV[2] > 0.90f) {  // Black water > 90%
                     if (bw_over90_start == 0) {
                         bw_over90_start = millis();
-                    } 
-                    else if (millis() - bw_over90_start > 10000) { // 10 seconds
-                        buzzer_switch->set(false); // Activate buzzer
-                        buzzer_active = true;
                     }
-                } 
-                else {
+                    else if (millis() - bw_over90_start > 10000) { // 10 seconds
+                        buzzer_active = true;
+                        setBuzzerOutput(true); // sound buzzer (only if enabled)
+                    }
+                } else {
                     bw_over90_start = 0;
-                    buzzer_switch->set(true); // Deactivate buzzer
                     buzzer_active = false;
+                    // if not in manual short beep window, ensure buzzer off
+                    if (millis() > buzzer_beep_until) {
+                        setBuzzerOutput(false);
+                    }
                 }
+            } else {
+                // buzzer disabled -> always off
+                bw_over90_start = 0;
+                buzzer_active = false;
+                setBuzzerOutput(false);
             }
-            // If buzzer_enabled is FALSE, do NOTHING - respect user's manual disable
         });
 
         event_loop()->onRepeat(
@@ -486,34 +539,29 @@ void setup()
 
                 // Buzzer pad pressed (rising edge)
                 if (buz_now && !last_buz_state) {
-                    if (buzzer_enabled) {
-                        buzzer_enabled = false;
-                        buzzer_switch->set(true);
-                        buzzer_active = false;
-                        buzzerStatus = false;
-                        Serial.println("Buzzer turned OFF by touch!");
-                        if (millis() - last_epaper_update > epaper_update_delay) {
-                            epaper_update();
-                            last_epaper_update = millis();
-                            refresh_counter = 0;
-                            Serial.println("Display updated to reflect Buzzer state change!");
-                        }
+                    // toggle enabled/disabled preference and update icon
+                    buzzer_enabled = !buzzer_enabled;
+                    buzzerStatus = buzzer_enabled; // icon follows enabled state
+
+                    Serial.printf("Buzzer function %s by touch!\n", buzzer_enabled ? "ENABLED" : "DISABLED");
+
+                    if (!buzzer_enabled) {
+                        // ensure buzzer physically off immediately
+                        setBuzzerOutput(false);
                     } else {
-                        buzzer_enabled = true;
-                        buzzer_switch->set(false);
+                        // provide a brief beep to confirm enable, non-blocking
                         buzzer_beep_until = millis() + 200;
-                        buzzer_active = true;
-                        buzzerStatus = true;
-                        Serial.println("Buzzer turned ON by touch!");
-                        if (millis() - last_epaper_update > epaper_update_delay) {
-                            epaper_update();
-                            last_epaper_update = millis();
-                            refresh_counter = 0;
-                            Serial.println("Display updated to reflect Buzzer state change!");
-                        }
+                        setBuzzerOutput(true);
+                    }
+
+                    if (millis() - last_epaper_update > epaper_update_delay) {
+                        epaper_update();
+                        last_epaper_update = millis();
+                        refresh_counter = 0;
+                        Serial.println("Display updated to reflect Buzzer state change!");
                     }
                 }
-        
+
                 // Display pad pressed (rising edge)
                 if (disp_now && !last_disp_state) {
                     if (millis() - last_epaper_update > epaper_update_delay) {
@@ -537,44 +585,58 @@ void setup()
                     }
                 }
         
-                // Both pads pressed (rising edge)
-                static unsigned long both_pressed_start = 0;
-                static bool both_pressed_buzzer_activated = false;
-                static bool restart_triggered = false;  // <-- ADD THIS FLAG
-
+                // Both pads pressed (rising edge) -> non-blocking restart scheduling
                 if (buz_now && disp_now) {
                     if (both_pressed_start == 0) {
                         both_pressed_start = millis();
                         both_pressed_buzzer_activated = false;
-                        restart_triggered = false;  // <-- ADD THIS
+                        restart_scheduled = false;
+                        restart_scheduled_at = 0;
                         Serial.println("Both buttons pressed!");
                     }
-                    
-                    // Activate buzzer once after first detection
+
+                    // give brief one-time buzzer feedback at first detection (not repeated)
                     if (!both_pressed_buzzer_activated) {
-                        buzzer_switch->set(false); // Activate buzzer ONCE
+                        setBuzzerOutput(true);
                         both_pressed_buzzer_activated = true;
                     }
-                    
-                    // Check for 5-second hold - only trigger ONCE
-                    if (!restart_triggered && millis() - both_pressed_start >= 5000) {
-                        restart_triggered = true;  // <-- ADD THIS to prevent re-triggering
-                        Serial.println("Both buttons held for 5 seconds. Restarting ESP32...");
-                        Serial.flush();  // <-- Flush serial buffer before restart
-                        
-                        // Give a brief visual/audio feedback before restart
+
+                    // if held long enough, schedule restart once
+                    if (!restart_scheduled && millis() - both_pressed_start >= RESTART_HOLD_MS) {
+                        restart_scheduled = true;
+                        restart_scheduled_at = millis() + RESTART_FEEDBACK_MS;
+                        Serial.println("Both buttons held long enough; scheduling restart...");
+                        // indicate pending restart (LED on)
                         digitalWrite(LED_PIN, HIGH);
-                        buzzer_switch->set(false); // Buzzer continues
-                        delay(500);  // Brief delay to ensure restart command is processed
-                        
+                    }
+
+                    // if a restart has been scheduled and time reached, perform restart (non-blocking)
+                    if (restart_scheduled && restart_scheduled_at != 0 && millis() >= restart_scheduled_at) {
+                        Serial.println("Restarting now.");
+                        Serial.flush();
+                        // do minimal final actions then restart
+                        setBuzzerOutput(false); // turn buzzer off to avoid stuck sound during reboot
                         ESP.restart();
                     }
+
                 } else {
+                    // released: reset timers and any pending scheduled restart
                     both_pressed_start = 0;
                     both_pressed_buzzer_activated = false;
-                    restart_triggered = false;  // <-- RESET ON RELEASE
+                    restart_scheduled = false;
+                    restart_scheduled_at = 0;
+                    digitalWrite(LED_PIN, LOW);
                 }
-        
+
+                // release short manual beep if time elapsed
+                if (buzzer_beep_until != 0 && millis() > buzzer_beep_until) {
+                    // don't turn off if auto alarm is active
+                    if (!buzzer_active) {
+                        setBuzzerOutput(false);
+                    }
+                    buzzer_beep_until = 0;
+                }
+
                 last_buz_state = buz_now;
                 last_disp_state = disp_now;
             }
