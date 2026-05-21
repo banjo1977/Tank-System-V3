@@ -136,6 +136,9 @@ void setup()
 {
     SetupLogging(ESP_LOG_WARN);
 
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, HIGH); // active LOW buzzer -> HIGH = off      
+
     Serial.print("Software version: ");
     Serial.println(SOFTWARE_VERSION);
 
