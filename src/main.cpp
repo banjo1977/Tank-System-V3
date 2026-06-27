@@ -11,6 +11,7 @@
 // validate function of touch sensors on real hardware (or swap for switches)
 // Amend the timing 
 // V3.4 - roll out, correct logic, analogue input faults. 
+// V3.5 - Corrected black water tank calibration.  Added status page readout of input and calibration pairs
 
 // Functionality for two touch-sensitive pads:
 // Pad 1 - update the display now (ie, don't wait 60 seconds).
@@ -44,12 +45,14 @@
 #include "sensesp/transforms/press_repeater.h"
 #include "sensesp_app.h"
 #include "sensesp/system/rgb_led.h"
+#include "sensesp/ui/status_page_item.h"
 #include <time.h>
 #include "sensesp/net/networking.h"
 #include "esp_task_wdt.h"
 
+using namespace sensesp;
 
-const char* SOFTWARE_VERSION = "v3-4"; // Update as needed
+const char* SOFTWARE_VERSION = "v3-5"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define TOUCH_THRESHOLD 17 // Define threshold for touch sensitivity
@@ -69,6 +72,26 @@ bool buzzer_active = false;      // indicates alarm-driven sounding (not used fo
 static bool buzzer_sounding = false; // actual physical output state (true = sounding)
 std::shared_ptr<sensesp::DigitalOutput> buzzer_switch;
 
+// Tank diagnostics for the status page
+sensesp::StatusPageItem<float> tank1_raw_adc("Stbd Fuel raw ADC", 0.0f, "Tank Diagnostics", 1000);
+sensesp::StatusPageItem<float> tank1_calibrated("Stbd Fuel calibrated", 0.0f, "Tank Diagnostics", 1001);
+sensesp::StatusPageItem<float> tank1_percent("Stbd Fuel %", 0.0f, "Tank Diagnostics", 1002);
+sensesp::StatusPageItem<float> tank2_raw_adc("Port Fuel raw ADC", 0.0f, "Tank Diagnostics", 1003);
+sensesp::StatusPageItem<float> tank2_calibrated("Port Fuel calibrated", 0.0f, "Tank Diagnostics", 1004);
+sensesp::StatusPageItem<float> tank2_percent("Port Fuel %", 0.0f, "Tank Diagnostics", 1005);
+sensesp::StatusPageItem<float> tank3_raw_adc("Black Water raw ADC", 0.0f, "Tank Diagnostics", 1006);
+sensesp::StatusPageItem<float> tank3_calibrated("Black Water calibrated", 0.0f, "Tank Diagnostics", 1007);
+sensesp::StatusPageItem<float> tank3_percent("Black Water %", 0.0f, "Tank Diagnostics", 1008);
+sensesp::StatusPageItem<float> tank4_raw_adc("Port Aft Water raw ADC", 0.0f, "Tank Diagnostics", 1009);
+sensesp::StatusPageItem<float> tank4_calibrated("Port Aft Water calibrated", 0.0f, "Tank Diagnostics", 1010);
+sensesp::StatusPageItem<float> tank4_percent("Port Aft Water %", 0.0f, "Tank Diagnostics", 1011);
+sensesp::StatusPageItem<float> tank5_raw_adc("Stbd Water raw ADC", 0.0f, "Tank Diagnostics", 1012);
+sensesp::StatusPageItem<float> tank5_calibrated("Stbd Water calibrated", 0.0f, "Tank Diagnostics", 1013);
+sensesp::StatusPageItem<float> tank5_percent("Stbd Water %", 0.0f, "Tank Diagnostics", 1014);
+sensesp::StatusPageItem<float> tank6_raw_adc("Port Fwd Water raw ADC", 0.0f, "Tank Diagnostics", 1015);
+sensesp::StatusPageItem<float> tank6_calibrated("Port Fwd Water calibrated", 0.0f, "Tank Diagnostics", 1016);
+sensesp::StatusPageItem<float> tank6_percent("Port Fwd Water %", 0.0f, "Tank Diagnostics", 1017);
+
 // Non-blocking restart scheduling
 static unsigned long both_pressed_start = 0;
 static bool both_pressed_buzzer_activated = false;
@@ -86,8 +109,6 @@ const unsigned long epaper_update_delay = 500; // Minimum 500ms between updates
 // Add at the top with other globals:
 unsigned long boot_time = 0;
 const unsigned long ALARM_STARTUP_DELAY = 30000; // 30 seconds before alarm checks
-
-using namespace sensesp;
 
 // Helper to control buzzer output; `on = true` means buzzer sounding.
 // Hardware: buzzer is active LOW (LOW = ON), HIGH = OFF.
@@ -280,6 +301,13 @@ void setup()
     auto analog_input_6 = std::make_shared<AnalogInput>(
         kAnalogInputpin_6, kAnalogInputReadInterval, kAnalogInputConfigPath_6);
 
+    analog_input_1->connect_to(&tank1_raw_adc);
+    analog_input_2->connect_to(&tank2_raw_adc);
+    analog_input_3->connect_to(&tank3_raw_adc);
+    analog_input_4->connect_to(&tank4_raw_adc);
+    analog_input_5->connect_to(&tank5_raw_adc);
+    analog_input_6->connect_to(&tank6_raw_adc);
+
     ConfigItem(analog_input_1)
         ->set_title("Stbd Fuel Tank Analog Input")
         ->set_description("Analog input read interval.")
@@ -347,7 +375,7 @@ void setup()
 
     const float multiplier_1 = 0.00415;
     const float multiplier_2 = 0.00415;
-    const float multiplier_3 = 0.005;
+    const float multiplier_3 = 0.0026;
     const float multiplier_4 = 0.005;
     const float multiplier_5 = 0.005;
     const float multiplier_6 = 0.00425;
@@ -355,7 +383,7 @@ void setup()
     const float offset_1 = -0.220314; // because the sensors output something
                                       // more than zero at empty position
     const float offset_2 = -0.220314;
-    const float offset_3 = -0.220314;
+    const float offset_3 = -0.24;
     const float offset_4 = -0.220314;
     const float offset_5 = -0.220314;
     const float offset_6 = -0.189470;
@@ -381,6 +409,31 @@ void setup()
     auto input_calibration_6 =
         new Linear(multiplier_6, offset_6, linear_config_path_6);
     analog_input_6->connect_to(input_calibration_6);
+
+    input_calibration_1->connect_to(&tank1_calibrated);
+    input_calibration_1->connect_to(new LambdaConsumer<float>([](float value) {
+      tank1_percent.set(value * 100.0f);
+    }));
+    input_calibration_2->connect_to(&tank2_calibrated);
+    input_calibration_2->connect_to(new LambdaConsumer<float>([](float value) {
+      tank2_percent.set(value * 100.0f);
+    }));
+    input_calibration_3->connect_to(&tank3_calibrated);
+    input_calibration_3->connect_to(new LambdaConsumer<float>([](float value) {
+      tank3_percent.set(value * 100.0f);
+    }));
+    input_calibration_4->connect_to(&tank4_calibrated);
+    input_calibration_4->connect_to(new LambdaConsumer<float>([](float value) {
+      tank4_percent.set(value * 100.0f);
+    }));
+    input_calibration_5->connect_to(&tank5_calibrated);
+    input_calibration_5->connect_to(new LambdaConsumer<float>([](float value) {
+      tank5_percent.set(value * 100.0f);
+    }));
+    input_calibration_6->connect_to(&tank6_calibrated);
+    input_calibration_6->connect_to(new LambdaConsumer<float>([](float value) {
+      tank6_percent.set(value * 100.0f);
+    }));
 
     // Create a ConfigItem for the linear transform.
 
