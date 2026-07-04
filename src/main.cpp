@@ -230,16 +230,16 @@ void setBuzzerOutput(bool on) {
 
     if (effective_on) {
         // Activate buzzer (active low)
-        digitalWrite(BUZZER_PIN, LOW);
         if (buzzer_switch) {
             buzzer_switch->set(false); // mirror physical pin state (LOW)
         }
+        digitalWrite(BUZZER_PIN, LOW);
     } else {
         // Deactivate buzzer (safe off = HIGH)
-        digitalWrite(BUZZER_PIN, HIGH);
         if (buzzer_switch) {
             buzzer_switch->set(true); // mirror physical pin state (HIGH)
         }
+        digitalWrite(BUZZER_PIN, HIGH);
     }
 }
 
@@ -672,13 +672,13 @@ void setup()
     
     controllerBuz->connect_to(buzzer_switch);
 
-    auto* sk_listener_buzz = new StringSKPutRequestListener(sk_path_buzz);
-    
-    sk_listener_buzz->connect_to(new Repeat<bool, bool>(10000))
-      ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
+    auto* sk_listener_buzz = new BoolSKPutRequestListener(sk_path_buzzer_alarm);
+    sk_listener_buzz->connect_to(new LambdaConsumer<bool>([controllerBuz](bool value) {
+        controllerBuz->swich_consumer_.set(value);
+    }));
 
     buzzer_switch->connect_to(new Repeat<bool, bool>(10003))
-      ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
+      ->connect_to(new SKOutputBool(sk_path_buzzer_alarm, config_path_sk_output));
 
     // Force buzzer OFF immediately at boot to override any saved DigitalOutput state
     // This runs once before anything else can interfere
