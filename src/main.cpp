@@ -184,12 +184,8 @@ void setup()
     buzzer_active = false;
     buzzer_sounding = false;
 
-    // construct DigitalOutput here (after hardware pin driven to safe state)
-    buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
-    buzzer_switch->set(true); // mirror hardware OFF (HIGH)
-    // ensure internal software state also reflects OFF
-    setBuzzerOutput(false);
-
+    // DON'T create DigitalOutput yet - just keep manual control until end of setup
+    
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
@@ -375,7 +371,7 @@ void setup()
 
     const float multiplier_1 = 0.00415;
     const float multiplier_2 = 0.00415;
-    const float multiplier_3 = 0.0026;
+    const float multiplier_3 = 0.000000623; // Black Water Tank: 52cm=100%, 21.3cm=40.28%
     const float multiplier_4 = 0.005;
     const float multiplier_5 = 0.005;
     const float multiplier_6 = 0.00425;
@@ -383,7 +379,7 @@ void setup()
     const float offset_1 = -0.220314; // because the sensors output something
                                       // more than zero at empty position
     const float offset_2 = -0.220314;
-    const float offset_3 = -0.24;
+    const float offset_3 = -0.047; // Black Water Tank: 52cm=100%, 21.3cm=40.28%
     const float offset_4 = -0.220314;
     const float offset_5 = -0.220314;
     const float offset_6 = -0.189470;
@@ -516,6 +512,22 @@ void setup()
     input_calibration_6->connect_to(new LambdaConsumer<float>(
         [](float value) { bV[4] = value; })); // Stbd Fresh Water (SWAPPED)
     
+    // Create the DigitalOutput NOW - right before we need it
+    // Ensure pin is firmly set to HIGH (OFF) before creating the object
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(50);  // Give it a moment to settle
+    digitalWrite(BUZZER_PIN, HIGH);  // Set again to be absolutely sure
+    
+    buzzer_switch = std::make_shared<sensesp::DigitalOutput>(BUZZER_PIN);
+    
+    // Override any defaults the DigitalOutput might have loaded
+    buzzer_sounding = true;  // Mark as ON to force state change
+    setBuzzerOutput(false);   // Force pin HIGH
+    delay(10);
+    digitalWrite(BUZZER_PIN, HIGH);  // One more explicit set to be absolutely certain
+    
+    Serial.printf("DEBUG: Post-DigitalOutput creation - BUZZER_PIN state: %d\n", digitalRead(BUZZER_PIN));
+    
     controllerBuz->connect_to(buzzer_switch);
 
     auto* sk_listener_buzz = new StringSKPutRequestListener(sk_path_buzz);
@@ -525,7 +537,15 @@ void setup()
 
     buzzer_switch->connect_to(new Repeat<bool, bool>(10003))
       ->connect_to(new SKOutputBool(sk_path_buzz, config_path_sk_output));
-      buzzer_switch->set(true); // Pin HIGH, buzzer OFF
+
+    // Force buzzer OFF immediately at boot to override any saved DigitalOutput state
+    // This runs once before anything else can interfere
+    event_loop()->onDelay(100, []() {
+        digitalWrite(BUZZER_PIN, HIGH);  // Physically ensure pin is HIGH (OFF)
+        buzzer_sounding = true;  // Force state change on next setBuzzerOutput call
+        setBuzzerOutput(false);   // Ensure all state is synchronized to OFF
+        Serial.println("DEBUG: Boot-time buzzer force-OFF executed");
+    });
 
     // Use RepeatSensor to call `updateTankValues` every 60 second
     event_loop()->onRepeat(
@@ -713,6 +733,10 @@ void setup()
 
     Serial.print("Free heap after app init: ");
     Serial.println(ESP.getFreeHeap());
+    
+    // Final verification that buzzer pin is OFF
+    Serial.printf("DEBUG: BUZZER_PIN (%d) state at END of setup: %d (should be 1 for HIGH/OFF)\n", BUZZER_PIN, digitalRead(BUZZER_PIN));
+    Serial.printf("DEBUG: buzzer_sounding = %d, buzzer_enabled = %d\n", buzzer_sounding, buzzer_enabled);
 
     // Check if any blocking delays are in setup()
     // Look for: delay(xxx), long loops, heavy processing
