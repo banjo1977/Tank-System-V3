@@ -60,6 +60,7 @@ const char* SOFTWARE_VERSION = "v3-5"; // Update as needed
 
 
 float bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
+float display_bV[NUM_BARS] = {0, 0, 0, 0, 0, 0};
 int refresh_counter = 0;
 
 const int BUZZER_PIN = 19; // Pin 19 for buzzer control.
@@ -500,17 +501,17 @@ void setup()
     change*/
 
     input_calibration_1->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[0] = value; })); // Stbd Fuel
+        [](float value) { bV[0] = value; display_bV[1] = value; })); // Stbd Fuel -> displayed second
     input_calibration_2->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[1] = value; })); // Port Fuel
+        [](float value) { bV[1] = value; display_bV[0] = value; })); // Port Fuel -> displayed first
     input_calibration_3->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[2] = value; })); // Black Water
+        [](float value) { bV[2] = value; display_bV[2] = value; })); // Black Water
     input_calibration_4->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[3] = value; })); // Port Aft Fresh Water
+        [](float value) { bV[3] = value; display_bV[3] = value; })); // Port Aft Fresh Water
     input_calibration_5->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[5] = value; })); // Port Forward Fresh Water (SWAPPED)
+        [](float value) { bV[5] = value; display_bV[5] = value; })); // Port Forward Fresh Water
     input_calibration_6->connect_to(new LambdaConsumer<float>(
-        [](float value) { bV[4] = value; })); // Stbd Fresh Water (SWAPPED)
+        [](float value) { bV[4] = value; display_bV[4] = value; })); // Stbd Fresh Water
     
     // Create the DigitalOutput NOW - right before we need it
     // Ensure pin is firmly set to HIGH (OFF) before creating the object

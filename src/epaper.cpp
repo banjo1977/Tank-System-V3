@@ -22,8 +22,8 @@ GxEPD_Class display(io, /*RST=*/D_RST_PIN, /*BUSY=*/D_BZ_PIN);
 extern const char* SOFTWARE_VERSION;
 
 const char *barLabels[NUM_BARS] = {
-    "Fuel Stbd",
     "Fuel Port",
+    "Fuel Stbd",
     "Black Water",
     "Water Port Aft",
     "Water Port Fwd",
@@ -273,11 +273,11 @@ void epaper_Arc(int16_t x, int16_t y, int16_t width, int16_t height, int16_t sta
 
 void epaper_update()
 {
-    extern float bV[NUM_BARS];  // ensure using latest calibrated values
+    extern float display_bV[NUM_BARS];  // use the display-oriented values
 
-    // sync barValues from bV
+    // sync barValues from display_bV
     for (int i = 0; i < NUM_BARS; i++) {
-        float pct = bV[i] * 100.0f;
+        float pct = display_bV[i] * 100.0f;
         if (pct < 0.0f) pct = 0.0f;
         if (pct > 100.0f) pct = 100.0f;
         barValues[i] = static_cast<uint8_t>(pct);
