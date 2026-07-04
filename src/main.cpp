@@ -12,6 +12,9 @@
 // Amend the timing 
 // V3.4 - roll out, correct logic, analogue input faults. 
 // V3.5 - Corrected black water tank calibration.  Added status page readout of input and calibration pairs
+// V3.6 - Amended tank display order to make easier to read.
+// V4.0 - Added two RGB LEDs, externally addressibe with colour and brightness, as well as making buzzer addressible.
+
 
 // Functionality for two touch-sensitive pads:
 // Pad 1 - update the display now (ie, don't wait 60 seconds).
@@ -52,7 +55,7 @@
 
 using namespace sensesp;
 
-const char* SOFTWARE_VERSION = "v3-5"; // Update as needed
+const char* SOFTWARE_VERSION = "v4-0"; // Update as needed
 #define BUZ_CTRL_PIN 12 // Touch Pad 1
 #define DISPLAY_CTRL_PIN 4 // Touch Pad 2
 #define TOUCH_THRESHOLD 17 // Define threshold for touch sensitivity
@@ -71,7 +74,99 @@ unsigned long buzzer_beep_until = 0; // Timer for short beep after manual enable
 
 bool buzzer_active = false;      // indicates alarm-driven sounding (not used for icon)
 static bool buzzer_sounding = false; // actual physical output state (true = sounding)
+static bool buzzer_requested = false; // external/local request to sound, gated by buzzer_enabled
 std::shared_ptr<sensesp::DigitalOutput> buzzer_switch;
+
+struct RgbLedDriver {
+    const uint8_t red_pin;
+    const uint8_t green_pin;
+    const uint8_t blue_pin;
+    const uint8_t red_channel;
+    const uint8_t green_channel;
+    const uint8_t blue_channel;
+    String command;
+    float brightness;
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+
+    RgbLedDriver(uint8_t rp, uint8_t gp, uint8_t bp, uint8_t rc, uint8_t gc, uint8_t bc)
+        : red_pin(rp), green_pin(gp), blue_pin(bp), red_channel(rc), green_channel(gc), blue_channel(bc),
+          command("off"), brightness(1.0f), red(0), green(0), blue(0) {}
+};
+
+RgbLedDriver led1{21, 22, 23, 0, 1, 2};
+RgbLedDriver led2{18, 16, 17, 3, 4, 5};
+
+void configureRgbLed(RgbLedDriver& led) {
+    ledcSetup(led.red_channel, 5000, 8);
+    ledcSetup(led.green_channel, 5000, 8);
+    ledcSetup(led.blue_channel, 5000, 8);
+
+    ledcAttachPin(led.red_pin, led.red_channel);
+    ledcAttachPin(led.green_pin, led.green_channel);
+    ledcAttachPin(led.blue_pin, led.blue_channel);
+}
+
+void applyRgbLed(RgbLedDriver& led) {
+    const float brightness = constrain(led.brightness, 0.0f, 1.0f);
+    const uint8_t scaled_red = static_cast<uint8_t>(led.red * brightness);
+    const uint8_t scaled_green = static_cast<uint8_t>(led.green * brightness);
+    const uint8_t scaled_blue = static_cast<uint8_t>(led.blue * brightness);
+
+    ledcWrite(led.red_channel, scaled_red);
+    ledcWrite(led.green_channel, scaled_green);
+    ledcWrite(led.blue_channel, scaled_blue);
+}
+
+void setRgbLedCommand(RgbLedDriver& led, const String& command) {
+    String cmd = command;
+    cmd.trim();
+    cmd.toLowerCase();
+
+    led.command = cmd;
+
+    if (cmd == "red") {
+        led.red = 255;
+        led.green = 0;
+        led.blue = 0;
+    } else if (cmd == "green") {
+        led.red = 0;
+        led.green = 255;
+        led.blue = 0;
+    } else if (cmd == "blue") {
+        led.red = 0;
+        led.green = 0;
+        led.blue = 255;
+    } else if (cmd == "white") {
+        led.red = 255;
+        led.green = 255;
+        led.blue = 255;
+    } else if (cmd == "yellow") {
+        led.red = 255;
+        led.green = 255;
+        led.blue = 0;
+    } else if (cmd == "cyan") {
+        led.red = 0;
+        led.green = 255;
+        led.blue = 255;
+    } else if (cmd == "magenta") {
+        led.red = 255;
+        led.green = 0;
+        led.blue = 255;
+    } else {
+        led.red = 0;
+        led.green = 0;
+        led.blue = 0;
+    }
+
+    applyRgbLed(led);
+}
+
+void setRgbLedBrightness(RgbLedDriver& led, float brightness) {
+    led.brightness = constrain(brightness, 0.0f, 1.0f);
+    applyRgbLed(led);
+}
 
 // Tank diagnostics for the status page
 sensesp::StatusPageItem<float> tank1_raw_adc("Stbd Fuel raw ADC", 0.0f, "Tank Diagnostics", 1000);
@@ -111,16 +206,29 @@ const unsigned long epaper_update_delay = 500; // Minimum 500ms between updates
 unsigned long boot_time = 0;
 const unsigned long ALARM_STARTUP_DELAY = 30000; // 30 seconds before alarm checks
 
+void setBuzzerOutput(bool on);
+
 // Helper to control buzzer output; `on = true` means buzzer sounding.
 // Hardware: buzzer is active LOW (LOW = ON), HIGH = OFF.
+void updateBuzzerState() {
+    setBuzzerOutput(buzzer_enabled && buzzer_requested);
+}
+
+void requestBuzzer(bool requested) {
+    buzzer_requested = requested;
+    updateBuzzerState();
+}
+
 void setBuzzerOutput(bool on) {
+    const bool effective_on = buzzer_enabled && on;
+
     // Avoid redundant operations
-    if (buzzer_sounding == on) {
+    if (buzzer_sounding == effective_on) {
         return;
     }
-    buzzer_sounding = on;
+    buzzer_sounding = effective_on;
 
-    if (on) {
+    if (effective_on) {
         // Activate buzzer (active low)
         digitalWrite(BUZZER_PIN, LOW);
         if (buzzer_switch) {
@@ -183,12 +291,18 @@ void setup()
     buzzer_enabled = true;
     buzzerStatus = buzzer_enabled; // icon shows enabled state
     buzzer_active = false;
+    buzzer_requested = false;
     buzzer_sounding = false;
 
     // DON'T create DigitalOutput yet - just keep manual control until end of setup
     
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    configureRgbLed(led1);
+    configureRgbLed(led2);
+    setRgbLedCommand(led1, "off");
+    setRgbLedCommand(led2, "off");
 
     // record boot time for startup alarm suppression
     boot_time = millis();
@@ -237,6 +351,33 @@ void setup()
     // Listen for Signal K environment.time and update system clock
     auto* sk_time_listener = new SKValueListener<String>("environment.time");    sk_time_listener->connect_to(new LambdaConsumer<String>([](String sk_time) {
         set_time_from_signalk(sk_time);
+    }));
+
+    auto* sk_led1_command_listener = new SKValueListener<String>("electrical.indicators.led1.command");
+    sk_led1_command_listener->connect_to(new LambdaConsumer<String>([](String command) {
+        setRgbLedCommand(led1, command);
+    }));
+
+    auto* sk_led1_brightness_listener = new SKValueListener<float>("electrical.indicators.led1.brightness");
+    sk_led1_brightness_listener->connect_to(new LambdaConsumer<float>([](float brightness) {
+        setRgbLedBrightness(led1, brightness);
+    }));
+
+    auto* sk_led2_command_listener = new SKValueListener<String>("electrical.indicators.led2.command");
+    sk_led2_command_listener->connect_to(new LambdaConsumer<String>([](String command) {
+        setRgbLedCommand(led2, command);
+    }));
+
+    auto* sk_led2_brightness_listener = new SKValueListener<float>("electrical.indicators.led2.brightness");
+    sk_led2_brightness_listener->connect_to(new LambdaConsumer<float>([](float brightness) {
+        setRgbLedBrightness(led2, brightness);
+    }));
+
+    auto* sk_buzzer_listener = new SKValueListener<bool>("electrical.switches.alarm.buzzer");
+    sk_buzzer_listener->connect_to(new LambdaConsumer<bool>([](bool enabled) {
+        buzzer_enabled = enabled;
+        buzzerStatus = enabled;
+        updateBuzzerState();
     }));
 
     // GPIO numbers to use for the analog inputs (linked to tank sensors)
@@ -586,14 +727,14 @@ void setup()
                     }
                     else if (millis() - bw_over90_start > 10000) { // 10 seconds
                         buzzer_active = true;
-                        setBuzzerOutput(true); // sound buzzer (only if enabled)
+                        requestBuzzer(true); // sound buzzer (only if enabled)
                     }
                 } else {
                     bw_over90_start = 0;
                     buzzer_active = false;
                     // if not in manual short beep window, ensure buzzer off
                     if (millis() > buzzer_beep_until) {
-                        setBuzzerOutput(false);
+                        requestBuzzer(false);
                     }
                 }
             } else {
@@ -625,11 +766,11 @@ void setup()
 
                     if (!buzzer_enabled) {
                         // ensure buzzer physically off immediately
-                        setBuzzerOutput(false);
+                        requestBuzzer(false);
                     } else {
                         // provide a brief beep to confirm enable, non-blocking
                         buzzer_beep_until = millis() + 200;
-                        setBuzzerOutput(true);
+                        requestBuzzer(true);
                     }
 
                     if (millis() - last_epaper_update > epaper_update_delay) {
@@ -675,7 +816,7 @@ void setup()
 
                     // give brief one-time buzzer feedback at first detection (not repeated)
                     if (!both_pressed_buzzer_activated) {
-                        setBuzzerOutput(true);
+                        requestBuzzer(true);
                         both_pressed_buzzer_activated = true;
                     }
 
@@ -693,7 +834,7 @@ void setup()
                         Serial.println("Restarting now.");
                         Serial.flush();
                         // do minimal final actions then restart
-                        setBuzzerOutput(false); // turn buzzer off to avoid stuck sound during reboot
+                        requestBuzzer(false); // turn buzzer off to avoid stuck sound during reboot
                         ESP.restart();
                     }
 
@@ -710,7 +851,7 @@ void setup()
                 if (buzzer_beep_until != 0 && millis() > buzzer_beep_until) {
                     // don't turn off if auto alarm is active
                     if (!buzzer_active) {
-                        setBuzzerOutput(false);
+                        requestBuzzer(false);
                     }
                     buzzer_beep_until = 0;
                 }
